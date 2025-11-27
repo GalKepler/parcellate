@@ -266,7 +266,7 @@ class VolumetricParcellator:
             Scalar image to fit to.
         """
         self.scalar_img = _load_nifti(scalar_img)
-        if self.resampling_target == "labels":
+        if self.resampling_target in ("labels", "atlas"):
             ref_img = self.atlas_img
             interpolation = "continuous"
         else:

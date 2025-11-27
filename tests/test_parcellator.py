@@ -323,3 +323,37 @@ def test_labels_from_lut() -> None:
     assert second["label"] == "Region_B"
     assert isinstance(parcellator.lut, pd.DataFrame)
     assert parcellator.regions == (1, 2)
+
+
+def test_resample_to_atlas() -> None:
+    atlas_img = _atlas()
+    scalar_data = np.array(
+        [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+            [[9.0, 10.0], [11.0, 12.0]],
+        ],
+        dtype=np.float32,
+    )
+    scalar_img = nib.Nifti1Image(scalar_data, np.eye(4) * 2)  # Different voxel size
+
+    parcellator = VolumetricParcellator(atlas_img, resampling_target="atlas")
+    parcellator.fit(scalar_img)
+
+    assert parcellator.ref_img == atlas_img
+    assert parcellator._prepared_scalar_img.shape == atlas_img.shape
+
+
+def test_region_not_in_index() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+    lut = pd.DataFrame({
+        "index": [0, 1, 2],
+        "label": ["Background", "Region_A", "Region_B"],
+    })
+    parcellator = VolumetricParcellator(atlas_img, labels=[3], lut=lut)  # Region 3 does not exist in atlas
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    assert 3 not in df["index"].values
+    assert df.columns.tolist() == ["index", "label"]
