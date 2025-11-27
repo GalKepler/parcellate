@@ -47,7 +47,7 @@ class VolumetricParcellator:
     """
 
     REQUIRED_LUT_COLUMNS: ClassVar[set[str]] = {"index", "label"}
-    BUILTING_STANDARD_MASKS: ClassVar[Mapping[str, str]] = {
+    BUILTIN_STANDARD_MASKS: ClassVar[Mapping[str, str]] = {
         "gm": load_mni152_gm_mask,
         "wm": load_mni152_wm_mask,
         "brain": load_mni152_brain_mask,
@@ -109,8 +109,8 @@ class VolumetricParcellator:
         nib.Nifti1Image
             Loaded mask image.
         """
-        if isinstance(mask, str) and mask in self.BUILTING_STANDARD_MASKS:
-            return self.BUILTING_STANDARD_MASKS[mask]()
+        if isinstance(mask, str) and mask in self.BUILTIN_STANDARD_MASKS:
+            return self.BUILTIN_STANDARD_MASKS[mask]()
         return _load_nifti(mask)
 
     def _get_labels(self, labels: Mapping[int, str] | Sequence[str] | None) -> list[int]:

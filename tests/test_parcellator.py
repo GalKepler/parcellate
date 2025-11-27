@@ -247,3 +247,55 @@ def test_no_statistical_functions() -> None:
     with pytest.raises(ValueError):
         vp = VolumetricParcellator(atlas_img, stat_functions={})
         vp._prepare_stat_functions()
+
+
+def test_builtin_standard_masks() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    for mask_name in ["gm", "wm", "brain"]:
+        parcellator = VolumetricParcellator(atlas_img, mask=mask_name)
+        parcellator.fit(scalar_img)
+        df = parcellator.transform(scalar_img)
+
+        total_voxels = np.sum(np.asarray(atlas_img.get_fdata()) > 0)
+        voxel_count = df["voxel_count"].sum()
+        assert voxel_count <= total_voxels
+
+
+def test_labels_as_list() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    labels = [1, 2]
+    parcellator = VolumetricParcellator(atlas_img, labels=labels)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    first = df.loc[df["index"] == 1].iloc[0]
+    second = df.loc[df["index"] == 2].iloc[0]
+
+    assert first["label"] == "1"
+    assert second["label"] == "2"
+
+
+def test_labels_from_lut() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    lut = pd.DataFrame({
+        "index": [0, 1, 2],
+        "label": ["Background", "Region_A", "Region_B"],
+    })
+
+    parcellator = VolumetricParcellator(atlas_img, lut=lut)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    first = df.loc[df["index"] == 1].iloc[0]
+    second = df.loc[df["index"] == 2].iloc[0]
+
+    assert first["label"] == "Region_A"
+    assert second["label"] == "Region_B"
+    assert isinstance(parcellator.lut, pd.DataFrame)
+    assert parcellator.regions == (1, 2)
