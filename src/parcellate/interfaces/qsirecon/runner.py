@@ -1,12 +1,19 @@
 from collections.abc import Mapping
 
-from parcellate.interfaces.qsirecon.models import AtlasDefinition, ParcellationOutput, ReconInput, ScalarMapDefinition
+from parcellate.interfaces.qsirecon.models import (
+    AtlasDefinition,
+    ParcellationOutput,
+    QSIReconConfig,
+    ReconInput,
+    ScalarMapDefinition,
+)
 from parcellate.parcellation.volume import VolumetricParcellator
 
 
 def run_qsirecon_parcellation_workflow(
     recon: ReconInput,
     plan: Mapping[AtlasDefinition, list[ScalarMapDefinition]],
+    config: QSIReconConfig,
 ) -> list[ParcellationOutput]:
     """Run parcellation workflow for a given recon input.
 
@@ -26,6 +33,9 @@ def run_qsirecon_parcellation_workflow(
         vp = VolumetricParcellator(
             atlas_img=atlas.nifti_path,
             lut=atlas.lut,
+            mask=config.mask,
+            background_label=config.background_label,
+            resampling_target=config.resampling_target,
         )
         vp.fit(scalar_img=scalar_maps[0].nifti_path)
         for scalar_map in scalar_maps:

@@ -47,7 +47,6 @@ def load_qsirecon_inputs(
                     context=context,
                     scalar_maps=scalar_maps,
                     atlases=atlases,
-                    mask=None,
                     transforms=(),
                 )
             )
@@ -77,6 +76,8 @@ def discover_scalar_maps(layout: BIDSLayout, subject: str, session: str | None) 
             ScalarMapDefinition(
                 name=_scalar_name(fobj),
                 nifti_path=Path(fobj.path),
+                param=_parameter_name(fobj),
+                desc=fobj.entities.get("desc"),
                 model=fobj.entities.get("model"),
                 origin=fobj.entities.get("Description"),
                 space=fobj.entities.get("space"),

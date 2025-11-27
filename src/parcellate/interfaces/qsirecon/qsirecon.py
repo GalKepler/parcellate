@@ -10,34 +10,20 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 try:  # Python 3.11+
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
-    import tomli as tomllib  # type: ignore
+    import tomli as tomllib  # type: ignore[import]
 
 from parcellate.interfaces.qsirecon.loader import load_qsirecon_inputs
+from parcellate.interfaces.qsirecon.models import ParcellationOutput, QSIReconConfig
 from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
-from parcellate.interfaces.qsirecon.models import ParcellationOutput
-
 
 LOGGER = logging.getLogger(__name__)
-
-
-@dataclass
-class QSIReconConfig:
-    """Configuration parsed from TOML input."""
-
-    input_root: Path
-    output_dir: Path
-    subjects: list[str] | None
-    sessions: list[str] | None
-    mask: Path | None
-    log_level: int = logging.INFO
 
 
 def _parse_log_level(value: str | int | None) -> int:
@@ -105,7 +91,7 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
         subject_dir = subject_dir / f"ses-{result.context.session_id}"
 
     # QSIRecon organizes diffusion derivatives under ``dwi``
-    output_dir = subject_dir / "dwi"
+    output_dir = subject_dir / "dwi" / f"atlas-{result.atlas.name}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     entities: list[str] = [result.context.label]
@@ -119,9 +105,9 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
         entities.append(f"model-{result.scalar_map.model}")
     if result.scalar_map.origin:
         entities.append(f"desc-{result.scalar_map.origin}")
-    entities.append(f"scalar-{result.scalar_map.name}")
+    entities.append(f"param-{result.scalar_map.name}")
 
-    filename = "_".join(entities + ["parcellation"]) + ".tsv"
+    filename = "_".join([*entities, "parcellation"]) + ".tsv"
     out_path = output_dir / filename
     result.stats_table.to_csv(out_path, sep="\t", index=False)
     LOGGER.debug("Wrote parcellation output to %s", out_path)
@@ -145,10 +131,8 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
 
     outputs: list[Path] = []
     for recon in recon_inputs:
-        if config.mask:
-            recon.mask = config.mask
         plan = plan_qsirecon_parcellation_workflow(recon)
-        jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan)
+        jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
         for result in jobs:
             outputs.append(_write_output(result, destination=config.output_dir))
     LOGGER.info("Finished writing %d parcellation files", len(outputs))

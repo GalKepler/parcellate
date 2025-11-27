@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,9 +41,11 @@ class ScalarMapDefinition:
 
     name: str
     nifti_path: Path
+    param: str | None = None
     model: str | None = None
     origin: str | None = None
     space: str | None = None
+    desc: str | None = None
     recon_workflow: str | None = None
 
 
@@ -53,7 +56,6 @@ class ReconInput:
     context: SubjectContext
     atlases: Sequence[AtlasDefinition]
     scalar_maps: Sequence[ScalarMapDefinition]
-    mask: Path | None = None
     transforms: Sequence[Path] = ()
 
 
@@ -65,3 +67,17 @@ class ParcellationOutput:
     atlas: AtlasDefinition
     scalar_map: ScalarMapDefinition
     stats_table: pd.DataFrame
+
+
+@dataclass
+class QSIReconConfig:
+    """Configuration parsed from TOML input."""
+
+    input_root: Path
+    output_dir: Path
+    subjects: list[str] | None = None
+    sessions: list[str] | None = None
+    mask: Path | None = None
+    background_label: int = 0
+    resampling_target: str | None = "data"
+    log_level: int = logging.INFO
