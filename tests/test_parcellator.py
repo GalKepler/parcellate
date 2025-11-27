@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import nibabel as nib
 import numpy as np
 import pytest
 
-from parcellate import Parcellator
+from parcellate import VolumetricParcellator
+from parcellate.parcellation.volume import ParcellatorNotFittedError
 
 
 def _atlas() -> nib.Nifti1Image:
@@ -16,71 +19,83 @@ def _atlas() -> nib.Nifti1Image:
     return nib.Nifti1Image(data, np.eye(4))
 
 
-def test_parcellate_returns_expected_statistics() -> None:
+def test_fit_and_transform_compute_basic_statistics() -> None:
     atlas_img = _atlas()
-    map_data = np.array(
+    scalar_data = np.array(
         [
-            [[0.0, 2.0], [4.0, 6.0]],
-            [[0.0, 8.0], [10.0, 12.0]],
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
         ],
+        dtype=np.float32,
     )
-    map_img = nib.Nifti1Image(map_data, atlas_img.affine)
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
 
-    parcellator = Parcellator(atlas_img, labels={1: "hippocampus", 2: "amygdala"})
-    df = parcellator.parcellate(map_img)
+    parcellator = VolumetricParcellator(atlas_img)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
 
-    atlas_data = atlas_img.get_fdata()
-    hippo_values = map_data[atlas_data == 1]
-    amygdala_values = map_data[atlas_data == 2]
+    region1_values = scalar_data[np.asarray(atlas_img.get_fdata()) == 1]
+    region2_values = scalar_data[np.asarray(atlas_img.get_fdata()) == 2]
 
-    hippo = df.loc[df["region_id"] == 1].iloc[0]
-    amygdala = df.loc[df["region_id"] == 2].iloc[0]
+    first = df.loc[df["index"] == 1].iloc[0]
+    second = df.loc[df["index"] == 2].iloc[0]
 
-    assert hippo["region_name"] == "hippocampus"
-    assert hippo["voxel_count"] == 2
-    assert hippo["mean"] == pytest.approx(np.nanmean(hippo_values))
-    assert hippo["median"] == pytest.approx(np.nanmedian(hippo_values))
-    assert hippo["std"] == pytest.approx(np.nanstd(hippo_values))
+    assert first["voxel_count"] == 2
+    assert second["voxel_count"] == 4
 
-    assert amygdala["region_name"] == "amygdala"
-    assert amygdala["voxel_count"] == 4
-    assert amygdala["mean"] == pytest.approx(np.nanmean(amygdala_values))
-    assert amygdala["median"] == pytest.approx(np.nanmedian(amygdala_values))
-    assert amygdala["std"] == pytest.approx(np.nanstd(amygdala_values))
+    assert first["mean"] == pytest.approx(np.nanmean(region1_values))
+    assert first["median"] == pytest.approx(np.nanmedian(region1_values))
+    assert first["std"] == pytest.approx(np.nanstd(region1_values))
+    assert first["volume_mm3"] == pytest.approx(2.0)
+
+    assert second["mean"] == pytest.approx(np.nanmean(region2_values))
+    assert second["median"] == pytest.approx(np.nanmedian(region2_values))
+    assert second["std"] == pytest.approx(np.nanstd(region2_values))
+    assert second["volume_mm3"] == pytest.approx(4.0)
 
 
-def test_resampling_aligns_to_atlas_grid() -> None:
+def test_masked_atlas_excludes_voxels() -> None:
     atlas_img = _atlas()
-    parcellator = Parcellator(atlas_img, resampling="map_to_atlas")
+    scalar_img = nib.Nifti1Image(
+        np.ones((2, 2, 2), dtype=np.float32),
+        atlas_img.affine,
+    )
+    mask = nib.Nifti1Image(
+        np.array(
+            [
+                [[1, 1], [1, 1]],
+                [[1, 1], [1, 0]],
+            ],
+            dtype=np.uint8,
+        ),
+        atlas_img.affine,
+    )
 
-    fine_affine = np.diag([0.5, 0.5, 0.5, 1.0])
-    fine_map = nib.Nifti1Image(np.ones((4, 4, 4)) * 5.0, fine_affine)
+    parcellator = VolumetricParcellator(atlas_img, mask=mask)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
 
-    df = parcellator.parcellate(fine_map)
-    assert df["mean"].tolist() == pytest.approx([5.0, 5.0])
-
-
-def test_resampling_can_be_disabled() -> None:
-    atlas_img = _atlas()
-    parcellator = Parcellator(atlas_img, resampling="raise")
-
-    coarse_affine = np.diag([2.0, 2.0, 2.0, 1.0])
-    coarse_map = nib.Nifti1Image(np.ones((1, 1, 1)), coarse_affine)
-
-    with pytest.raises(ValueError):
-        parcellator.parcellate(coarse_map)
+    second = df.loc[df["index"] == 2].iloc[0]
+    assert second["voxel_count"] == 3
+    assert second["volume_mm3"] == pytest.approx(3.0)
 
 
 def test_custom_statistics_override_defaults() -> None:
     atlas_img = _atlas()
-    map_img = nib.Nifti1Image(
-        np.arange(8, dtype=np.float32).reshape((2, 2, 2)), atlas_img.affine
-    )
+    scalar_img = nib.Nifti1Image(np.arange(8, dtype=np.float32).reshape((2, 2, 2)), atlas_img.affine)
 
-    parcellator = Parcellator(atlas_img, stat_functions={"max": np.nanmax})
-    df = parcellator.parcellate(map_img, stat_functions={"min": np.nanmin})
+    parcellator = VolumetricParcellator(atlas_img, stat_functions={"min": np.nanmin})
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
 
-    assert "mean" not in df.columns
-    assert "median" not in df.columns
-    assert "std" not in df.columns
+    assert set(df.columns) == {"index", "label", "min"}
     assert df["min"].tolist() == pytest.approx([1.0, 3.0])
+
+
+def test_transform_requires_fit() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2)), atlas_img.affine)
+    parcellator = VolumetricParcellator(atlas_img)
+
+    with pytest.raises(ParcellatorNotFittedError):
+        parcellator.transform(scalar_img)

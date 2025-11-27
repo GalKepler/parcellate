@@ -312,7 +312,6 @@ class VolumetricParcellator:
             for stat in self._stat_functions:
                 stat_name = stat.name
                 stat_func = stat.function
-                # check if the function needs that image and pass it if so
                 if stat.requires_image:
                     stat_value = stat_func(parcel_values, prepared_scalar_img)
                 else:

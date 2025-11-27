@@ -45,7 +45,7 @@ def voxel_count(parcel_mask: np.ndarray) -> int:
     int
         The number of voxels in the parcel.
     """
-    num_voxels = np.sum(parcel_mask)
+    num_voxels = np.sum(parcel_mask.astype(bool))
     return int(num_voxels)
 
 
