@@ -27,7 +27,7 @@ def volume(parcel_mask: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
     voxel_volume = voxel_sizes[0] * voxel_sizes[1] * voxel_sizes[2]
     num_voxels = np.sum(parcel_mask.astype(bool))
     total_volume = num_voxels * voxel_volume
-    return total_volume
+    return float(total_volume)
 
 
 def voxel_count(parcel_mask: np.ndarray) -> int:
@@ -67,12 +67,12 @@ def z_filtered_mean(values: np.ndarray, z_thresh: float = 3.0) -> float:
     mean_val = np.nanmean(values)
     std_val = np.nanstd(values)
     if std_val == 0:
-        return mean_val
+        return float(mean_val)
 
     z_scores = (values - mean_val) / std_val
     filtered_values = values[np.abs(z_scores) <= z_thresh]
     if filtered_values.size == 0:
-        return mean_val
+        return float(mean_val)
 
     return float(np.nanmean(filtered_values))
 
@@ -94,12 +94,12 @@ def z_filtered_std(values: np.ndarray, z_thresh: float = 3.0) -> float:
     mean_val = np.nanmean(values)
     std_val = np.nanstd(values)
     if std_val == 0:
-        return std_val
+        return float(std_val)
 
     z_scores = (values - mean_val) / std_val
     filtered_values = values[np.abs(z_scores) <= z_thresh]
     if filtered_values.size == 0:
-        return std_val
+        return float(std_val)
 
     return float(np.nanstd(filtered_values))
 

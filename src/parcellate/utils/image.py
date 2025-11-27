@@ -23,4 +23,4 @@ def _load_nifti(img: nib.Nifti1Image | str | Path) -> nib.Nifti1Image:
     """
     if isinstance(img, nib.Nifti1Image):
         return img
-    return nib.load(str(img))
+    return nib.Nifti1Image.from_filename(str(img))
