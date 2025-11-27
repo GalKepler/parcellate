@@ -94,7 +94,7 @@ def z_filtered_std(values: np.ndarray, z_thresh: float = 3.0) -> float:
     mean_val = np.nanmean(values)
     std_val = np.nanstd(values)
     if std_val == 0:
-        return float(std_val)
+        return float(mean_val)
 
     z_scores = (values - mean_val) / std_val
     filtered_values = values[np.abs(z_scores) <= z_thresh]
