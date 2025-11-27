@@ -120,3 +120,6 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["src"]
+
+[tool.flake8]
+max-line-length = 120

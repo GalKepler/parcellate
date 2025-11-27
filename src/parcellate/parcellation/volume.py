@@ -130,7 +130,7 @@ class VolumetricParcellator:
         if labels is not None:
             if isinstance(labels, Mapping):
                 return list(labels.keys())
-            elif isinstance(labels, list):
+            elif isinstance(labels, Sequence):
                 return list(labels)
         if self.lut is not None:
             return self.lut["index"].tolist()
