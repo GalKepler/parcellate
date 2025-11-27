@@ -252,7 +252,7 @@ class VolumetricParcellator:
             return fallback
 
         prepared = [Statistic(name, func) for name, func in stat_functions.items()]
-        if not prepared:
+        if not prepared or len(prepared) == 0:
             raise MissingStatisticalFunctionError()
         return prepared
 

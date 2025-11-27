@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import nibabel as nib
 import numpy as np
+import pandas as pd
 import pytest
 
 from parcellate import VolumetricParcellator
-from parcellate.parcellation.volume import ParcellatorNotFittedError
+from parcellate.parcellation.volume import AtlasShapeError, MissingLUTColumnsError, ParcellatorNotFittedError
 
 
 def _atlas() -> nib.Nifti1Image:
@@ -213,3 +214,36 @@ def test_atlas_is_filename() -> None:
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
     assert first["volume_mm3"] == pytest.approx(2.0)
+
+
+def test_lut_missing_columns() -> None:
+    atlas_img = _atlas()
+    lut = pd.DataFrame(
+        {
+            "some_other_column": ["Region 1", "Region 2", "Region 3"],
+        },
+        index=[0, 1, 2],
+    )
+
+    with pytest.raises(MissingLUTColumnsError):
+        VolumetricParcellator(atlas_img, lut=lut)
+
+
+def test_atlas_not_3d() -> None:
+    data = np.array(
+        [
+            [[0, 1], [1, 2]],
+            [[0, 2], [2, 2]],
+        ],
+        dtype=np.int16,
+    )
+    atlas_img_4d = nib.Nifti1Image(np.expand_dims(data, axis=-1), np.eye(4))
+    with pytest.raises(AtlasShapeError):
+        VolumetricParcellator(atlas_img_4d)
+
+
+def test_no_statistical_functions() -> None:
+    atlas_img = _atlas()
+    with pytest.raises(ValueError):
+        vp = VolumetricParcellator(atlas_img, stat_functions={})
+        vp._prepare_stat_functions()
