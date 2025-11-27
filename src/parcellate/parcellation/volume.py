@@ -8,11 +8,32 @@ from typing import ClassVar, Literal
 import nibabel as nib
 import numpy as np
 import pandas as pd
+from nilearn.datasets import load_mni152_brain_mask, load_mni152_gm_mask, load_mni152_wm_mask
 from nilearn.image import resample_to_img
-from nilearn.datasets import load_mni152_gm_mask, load_mni152_wm_mask, load_mni152_brain_mask
+
 from parcellate.metrics.base import Statistic
 from parcellate.metrics.volume import BUILTIN_STATISTICS
 from parcellate.utils import _load_nifti
+
+
+class MissingLUTColumnsError(ValueError):
+    def __init__(self, missing):
+        super().__init__(f"Lookup table is missing required columns: {missing}")
+
+
+class AtlasShapeError(ValueError):
+    def __init__(self, message: str = "Atlas image must be 3D."):
+        super().__init__(message)
+
+
+class MissingStatisticalFunctionError(ValueError):
+    def __init__(self, message: str = "At least one statistical function must be provided."):
+        super().__init__(message)
+
+
+class ParcellatorNotFittedError(RuntimeError):
+    def __init__(self, message: str = "Parcellator must be fitted before calling transform()."):
+        super().__init__(message)
 
 
 class VolumetricParcellator:
@@ -138,7 +159,7 @@ class VolumetricParcellator:
         required_columns = self.REQUIRED_LUT_COLUMNS
         if not required_columns.issubset(lut_df.columns):
             missing = required_columns - set(lut_df.columns)
-            raise ValueError(f"Lookup table is missing required columns: {missing}")
+            raise MissingLUTColumnsError(missing)
 
         return lut_df
 
@@ -196,7 +217,7 @@ class VolumetricParcellator:
     def _load_atlas_data(self) -> np.ndarray:
         atlas_data = np.asarray(self.atlas_img.get_fdata())
         if atlas_data.ndim != 3:
-            raise ValueError("Atlas must be a 3D volume.")
+            raise AtlasShapeError()
         return atlas_data.astype(int)
 
     def _prepare_stat_functions(
@@ -232,7 +253,7 @@ class VolumetricParcellator:
 
         prepared = [Statistic(name, func) for name, func in stat_functions.items()]
         if not prepared:
-            raise ValueError("At least one statistical function must be provided.")
+            raise MissingStatisticalFunctionError()
         return prepared
 
     def fit(self, scalar_img: nib.Nifti1Image | str | Path) -> None:
@@ -268,7 +289,7 @@ class VolumetricParcellator:
             DataFrame containing parcellation statistics for each region.
         """
         if not hasattr(self, "_prepared_atlas_img") or not hasattr(self, "_prepared_scalar_img"):
-            raise RuntimeError("Parcellator must be fitted before calling transform().")
+            raise ParcellatorNotFittedError()
         prepared_scalar_img = self._prepare_map(
             _load_nifti(scalar_img),
             self.ref_img,

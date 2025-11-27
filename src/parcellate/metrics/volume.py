@@ -2,9 +2,10 @@
 A battery of volumetric parcellation statistics.
 """
 
-from parcellate.metrics.base import Statistic
 import nibabel as nib
 import numpy as np
+
+from parcellate.metrics.base import Statistic
 
 
 def volume(parcel_mask: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
