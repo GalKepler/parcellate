@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from parcellate import VolumetricParcellator
+from parcellate.metrics.volume import BUILTIN_STATISTICS
 from parcellate.parcellation.volume import AtlasShapeError, MissingLUTColumnsError, ParcellatorNotFittedError
 
 
@@ -249,6 +250,13 @@ def test_no_statistical_functions() -> None:
         vp._prepare_stat_functions()
 
 
+def test_fallback_statistics() -> None:
+    atlas_img = _atlas()
+    vp = VolumetricParcellator(atlas_img)
+    stats = vp._prepare_stat_functions(fallback=BUILTIN_STATISTICS)
+    assert stats == BUILTIN_STATISTICS
+
+
 def test_builtin_standard_masks() -> None:
     atlas_img = _atlas()
     scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
@@ -268,6 +276,22 @@ def test_labels_as_list() -> None:
     scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
 
     labels = [1, 2]
+    parcellator = VolumetricParcellator(atlas_img, labels=labels)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    first = df.loc[df["index"] == 1].iloc[0]
+    second = df.loc[df["index"] == 2].iloc[0]
+
+    assert first["label"] == "1"
+    assert second["label"] == "2"
+
+
+def test_labels_as_dict() -> None:
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    labels = {1: "Region_One", 2: "Region_Two"}
     parcellator = VolumetricParcellator(atlas_img, labels=labels)
     parcellator.fit(scalar_img)
     df = parcellator.transform(scalar_img)

@@ -222,7 +222,7 @@ class VolumetricParcellator:
 
     def _prepare_stat_functions(
         self,
-        stat_functions: Mapping[str, Callable[..., float]] | None,
+        stat_functions: Mapping[str, Callable[..., float]] | None = None,
         *,
         fallback: Mapping[str, Callable[..., float]] | None = None,
     ) -> list[Statistic]:
