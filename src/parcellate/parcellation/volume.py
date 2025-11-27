@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from logging import warning
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -9,9 +9,10 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 from nilearn.image import resample_to_img
+from nilearn.datasets import load_mni152_gm_mask, load_mni152_wm_mask, load_mni152_brain_mask
+from parcellate.metrics.base import Statistic
+from parcellate.metrics.volume import BUILTIN_STATISTICS
 from parcellate.utils import _load_nifti
-
-StatFunction = Callable[[np.ndarray], float]
 
 
 class VolumetricParcellator:
@@ -25,6 +26,11 @@ class VolumetricParcellator:
     """
 
     REQUIRED_LUT_COLUMNS: ClassVar[set[str]] = {"index", "label"}
+    BUILTING_STANDARD_MASKS: ClassVar[Mapping[str, str]] = {
+        "gm": load_mni152_gm_mask,
+        "wm": load_mni152_wm_mask,
+        "brain": load_mni152_brain_mask,
+    }
 
     def __init__(
         self,
@@ -35,7 +41,7 @@ class VolumetricParcellator:
         mask: nib.Nifti1Image | str | Path | None = None,
         background_label: int = 0,
         resampling_target: Literal["data", "labels", None] = "data",
-        stat_functions: Mapping[str, StatFunction] | None = None,
+        stat_functions: Mapping[str, Callable[..., float]] | None = None,
     ) -> None:
         """
         Initialize a volumetric parcellator
@@ -61,12 +67,30 @@ class VolumetricParcellator:
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
         if mask is not None:
-            self.mask = _load_nifti(mask)
+            self.mask = self._load_mask(mask)
         self.background_label = int(background_label)
         self.resampling_target = resampling_target
         self._atlas_data = self._load_atlas_data()
         self._regions = self._build_regions(labels)
         self._stat_functions = self._prepare_stat_functions(stat_functions)
+
+    def _load_mask(self, mask: nib.Nifti1Image | str | Path) -> nib.Nifti1Image:
+        """
+        Load a mask image, supporting built-in standard masks.
+
+        Parameters
+        ----------
+        mask : nib.Nifti1Image | str | Path
+            Mask image to load.
+
+        Returns
+        -------
+        nib.Nifti1Image
+            Loaded mask image.
+        """
+        if isinstance(mask, str) and mask in self.BUILTING_STANDARD_MASKS:
+            return self.BUILTING_STANDARD_MASKS[mask]()
+        return _load_nifti(mask)
 
     def _get_labels(self, labels: Mapping[int, str] | Sequence[str] | None) -> list[int]:
         """
@@ -123,55 +147,38 @@ class VolumetricParcellator:
         """Tuple of regions defined in the atlas."""
         return self._regions
 
-    def parcellate(
-        self,
-        map_img: nib.Nifti1Image,
-        stat_functions: Mapping[str, StatFunction] | None = None,
-    ) -> pd.DataFrame:
-        """Extract parcel-wise statistics from a scalar map.
-
-        Args:
-            map_img: Scalar-valued image to sample.
-            stat_functions: Optional mapping of statistics to compute. Defaults
-                to the statistics supplied at initialization.
-
-        Returns:
-            DataFrame with one row per parcel containing the requested
-            statistics. Columns include ``region_id``, ``region_name``,
-            ``voxel_count``, and one column per statistic.
+    def _apply_mask_to_atlas(self) -> nib.Nifti1Image:
         """
-        prepared_map = self._prepare_map(map_img)
-        map_data = np.asarray(prepared_map.get_fdata())
-        stats = self._prepare_stat_functions(stat_functions, fallback=self._stat_functions)
+        Apply masking to parcellation atlas.
 
-        rows: list[dict[str, float | int | str]] = []
-        for region in self._regions:
-            mask = self._atlas_data == region.region_id
-            if not mask.any():
-                continue
+        Returns
+        -------
+        nib.Nifti1Image
+            Masked atlas image.
+        """
+        atlas_data = np.asarray(self._prepared_atlas_img.get_fdata())
+        mask_data = np.asarray(self._prepared_mask.get_fdata()).astype(bool)
+        atlas_data[~mask_data] = self.background_label
+        return nib.Nifti1Image(atlas_data, self._prepared_atlas_img.affine, self._prepared_atlas_img.header)
 
-            values = map_data[mask]
-            region_stats = {
-                "region_id": region.region_id,
-                "region_name": region.name,
-                "voxel_count": int(mask.sum()),
-            }
-            for name, func in stats.items():
-                region_stats[name] = float(func(values))
+    def _prepare_map(
+        self, source: nib.Nifti1Image, reference: nib.Nifti1Image, interpolation: str = "nearest"
+    ) -> nib.Nifti1Image:
+        """Resample source image to reference image grid if needed.
 
-            rows.append(region_stats)
+        Parameters
+        ----------
+        source : nib.Nifti1Image
+            Source image to resample.
+        reference : nib.Nifti1Image
+            Reference image defining the target grid.
 
-        return pd.DataFrame(rows, columns=["region_id", "region_name", "voxel_count", *stats.keys()])
-
-    def _prepare_map(self, map_img: nib.Nifti1Image) -> nib.Nifti1Image:
-        if map_img.shape != self.atlas_img.shape or not np.allclose(map_img.affine, self.atlas_img.affine):
-            if self.resampling == "map_to_atlas":
-                return resample_to_img(map_img, self.atlas_img, interpolation="continuous")
-            raise ValueError(
-                "Input map does not match atlas grid; enable resampling or supply a map in atlas space.",
-            )
-
-        return map_img
+        Returns
+        -------
+        nib.Nifti1Image
+            Resampled image.
+        """
+        return resample_to_img(source, reference, interpolation=interpolation, force_resample=True, copy_header=True)
 
     def _build_regions(self, labels: Mapping[int, str] | Sequence[str] | None) -> tuple[int, ...]:
         """
@@ -194,20 +201,100 @@ class VolumetricParcellator:
 
     def _prepare_stat_functions(
         self,
-        stat_functions: Mapping[str, StatFunction] | None,
+        stat_functions: Mapping[str, Callable[..., float]] | None,
         *,
-        fallback: Mapping[str, StatFunction] | None = None,
-    ) -> Mapping[str, StatFunction]:
+        fallback: Mapping[str, Callable[..., float]] | None = None,
+    ) -> list[Statistic]:
+        """
+        Generate a list of summary statistics to describe each ROI
+
+        Parameters
+        ----------
+        stat_functions : Mapping[str, Callable[..., float]] | None
+            Either a mapping of statistic names to functions or None to use defaults.
+        fallback : Mapping[str, Callable[..., float]] | None, optional
+            Fallback statistics to use if stat_functions is None, by default None
+
+        Returns
+        -------
+        list[Statistic]
+            List of prepared statistics.
+
+        Raises
+        ------
+        ValueError
+            If no statistical functions are provided.
+        """
         if stat_functions is None:
             if fallback is None:
-                return {
-                    "mean": np.nanmean,
-                    "median": np.nanmedian,
-                    "std": np.nanstd,
-                }
+                return BUILTIN_STATISTICS
             return fallback
 
-        prepared = {str(name): func for name, func in stat_functions.items()}
+        prepared = [Statistic(name, func) for name, func in stat_functions.items()]
         if not prepared:
-            raise ValueError("At least one statistic function must be provided.")
+            raise ValueError("At least one statistical function must be provided.")
         return prepared
+
+    def fit(self, scalar_img: nib.Nifti1Image | str | Path) -> None:
+        """
+        Fit the parcellator to a scalar image.
+
+        Parameters
+        ----------
+        scalar_img : nib.Nifti1Image | str | Path
+            Scalar image to fit to.
+        """
+        self.scalar_img = _load_nifti(scalar_img)
+        if self.resampling_target == "labels":
+            ref_img = self.atlas_img
+            interpolation = "continuous"
+        else:
+            ref_img = self.scalar_img
+            interpolation = "nearest"
+        self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation="nearest")
+        self._prepared_scalar_img = self._prepare_map(self.scalar_img, ref_img, interpolation=interpolation)
+        if hasattr(self, "mask"):
+            self._prepared_mask = self._prepare_map(self.mask, ref_img, interpolation="nearest")
+            self._prepared_atlas_img = self._apply_mask_to_atlas()
+        self.ref_img = ref_img
+
+    def transform(self, scalar_img: str | Path | nib.Nifti1Image) -> pd.DataFrame:
+        """
+        Apply the parcellation to the fitted scalar image.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing parcellation statistics for each region.
+        """
+        if not hasattr(self, "_prepared_atlas_img") or not hasattr(self, "_prepared_scalar_img"):
+            raise RuntimeError("Parcellator must be fitted before calling transform().")
+        prepared_scalar_img = self._prepare_map(
+            _load_nifti(scalar_img),
+            self.ref_img,
+            interpolation="continuous",
+        )
+
+        scalar_data = np.asarray(prepared_scalar_img.get_fdata())
+        atlas_data = np.asarray(self._prepared_atlas_img.get_fdata()).astype(int)
+        if self.lut is not None:
+            result = self.lut.copy()
+        else:
+            result = pd.DataFrame({"index": self._regions, "label": [str(r) for r in self._regions]})
+
+        for region_id in self._regions:
+            if region_id not in result["index"].values:
+                warning(f"Region ID {region_id} not found in LUT; skipping.")
+                continue
+            parcel_mask = atlas_data == region_id
+            parcel_values = scalar_data[parcel_mask]
+            for stat in self._stat_functions:
+                stat_name = stat.name
+                stat_func = stat.function
+                # check if the function needs that image and pass it if so
+                if stat.requires_image:
+                    stat_value = stat_func(parcel_values, prepared_scalar_img)
+                else:
+                    stat_value = stat_func(parcel_values)
+                result.loc[result["index"] == region_id, stat_name] = stat_value
+        return result

@@ -3,6 +3,7 @@ Utility functions for image handling
 """
 
 from pathlib import Path
+
 import nibabel as nib
 
 

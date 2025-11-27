@@ -1,5 +1,5 @@
-import numpy as np
 import nibabel as nib
+import numpy as np
 import pytest
 
 from parcellate import Parcellator
@@ -73,7 +73,9 @@ def test_resampling_can_be_disabled() -> None:
 
 def test_custom_statistics_override_defaults() -> None:
     atlas_img = _atlas()
-    map_img = nib.Nifti1Image(np.arange(8, dtype=np.float32).reshape((2, 2, 2)), atlas_img.affine)
+    map_img = nib.Nifti1Image(
+        np.arange(8, dtype=np.float32).reshape((2, 2, 2)), atlas_img.affine
+    )
 
     parcellator = Parcellator(atlas_img, stat_functions={"max": np.nanmax})
     df = parcellator.parcellate(map_img, stat_functions={"min": np.nanmin})
