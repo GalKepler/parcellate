@@ -1,3 +1,6 @@
-mkdocs>=1.4.2
-mkdocs-material>=8.5.10
-mkdocstrings[python]>=0.26.1
+sphinx>=7.3
+furo>=2024.8.6
+myst-parser>=3.0
+sphinx-autodoc-typehints>=2.2
+sphinx-copybutton>=0.5
+sphinx-design>=0.6
