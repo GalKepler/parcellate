@@ -1,4 +1,9 @@
-# parcellate
+# Overview
+
+| Property | Tools & Grades
+| :------- | :------:
+| docs     | [![docs](https://parcellate.readthedocs.io/en/latest/?version=latest)](https://readthedocs.org/projects/parcellate/badge/?version=latest)
+| tests, CI & coverage  | [![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain), [![codecov](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate), [![codacy](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate)
 
 [![Release](https://img.shields.io/github/v/release/GalKepler/parcellate)](https://img.shields.io/github/v/release/GalKepler/parcellate)
 [![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain)
