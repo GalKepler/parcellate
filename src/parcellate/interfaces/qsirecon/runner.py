@@ -30,6 +30,9 @@ def run_qsirecon_parcellation_workflow(
     jobs: list[ParcellationOutput] = []
 
     for atlas, scalar_maps in plan.items():
+        if not scalar_maps:
+            continue
+
         vp = VolumetricParcellator(
             atlas_img=atlas.nifti_path,
             lut=atlas.lut,
