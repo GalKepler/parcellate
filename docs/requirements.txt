@@ -5,3 +5,4 @@ sphinx-autodoc-typehints>=2.2
 sphinx-copybutton>=0.5
 sphinx-design>=0.6
 sphinx-rtd-theme>=3.0
+pydata-sphinx-theme>=0.16.1
