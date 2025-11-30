@@ -96,18 +96,18 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
 
     entities: list[str] = [result.context.label]
     space = result.atlas.space or result.scalar_map.space
+    entities.append(f"atlas-{result.atlas.name}")
     if space:
         entities.append(f"space-{space}")
     if result.atlas.resolution:
         entities.append(f"res-{result.atlas.resolution}")
-    entities.append(f"atlas-{result.atlas.name}")
     if result.scalar_map.model:
         entities.append(f"model-{result.scalar_map.model}")
-    if result.scalar_map.origin:
-        entities.append(f"desc-{result.scalar_map.origin}")
-    entities.append(f"param-{result.scalar_map.name}")
+    entities.append(f"param-{result.scalar_map.param}")
+    if result.scalar_map.desc:
+        entities.append(f"desc-{result.scalar_map.desc}")
 
-    filename = "_".join([*entities, "parcellation"]) + ".tsv"
+    filename = "_".join([*entities, "parc"]) + ".tsv"
     out_path = output_dir / filename
     result.stats_table.to_csv(out_path, sep="\t", index=False)
     LOGGER.debug("Wrote parcellation output to %s", out_path)
