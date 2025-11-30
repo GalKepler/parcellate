@@ -1,0 +1,4 @@
+[qsirecon]
+input_root = "/media/storage/yalab-dev/qsiprep_test/derivatives/qsirecon"
+output_dir = "/media/storage/yalab-dev/qsiprep_test/derivatives/qsiparc"
+mask = "gm"
