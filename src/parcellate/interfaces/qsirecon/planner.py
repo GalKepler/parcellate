@@ -13,7 +13,9 @@ def _space_match(atlas: AtlasDefinition, scalar_map: ScalarMapDefinition) -> boo
     return bool(atlas.space and scalar_map.space and atlas.space.lower() == scalar_map.space.lower())
 
 
-def plan_qsirecon_parcellation_workflow(recon_input) -> Mapping[AtlasDefinition : list[ScalarMapDefinition]]:
+def plan_qsirecon_parcellation_workflow(
+    recon_input,
+) -> Mapping[AtlasDefinition, list[ScalarMapDefinition]]:
     """Plan parcellation workflow for a given recon input.
 
     Parameters
