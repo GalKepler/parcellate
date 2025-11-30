@@ -2,14 +2,11 @@
 
 | Property | Tools & Grades
 | :------- | :------:
-| docs     | [![docs](https://parcellate.readthedocs.io/en/latest/?version=latest)](https://readthedocs.org/projects/parcellate/badge/?version=latest)
-| tests, CI & coverage  | [![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain), [![codecov](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate), [![codacy](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate)
+| docs     | [![docs](https://readthedocs.org/projects/neuroparcellate/badge/?version=latest)](https://neuroparcellate.readthedocs.io/en/latest/?version=latest)
+| tests, CI & coverage  | [![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain), [![codecov](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate), [![Codacy Badge](https://app.codacy.com/project/badge/Grade/38a53841e1f842b1b4c80913aee026c3)](https://app.codacy.com/gh/GalKepler/parcellate/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+| activity  | [![Commit activity](https://img.shields.io/github/commit-activity/m/GalKepler/parcellate)](https://img.shields.io/github/commit-activity/m/GalKepler/parcellate)
+| license   | [![License](https://img.shields.io/github/license/GalKepler/parcellate)](https://img.shields.io/github/license/GalKepler/parcellate)
 
-[![Release](https://img.shields.io/github/v/release/GalKepler/parcellate)](https://img.shields.io/github/v/release/GalKepler/parcellate)
-[![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/GalKepler/parcellate)](https://img.shields.io/github/commit-activity/m/GalKepler/parcellate)
-[![License](https://img.shields.io/github/license/GalKepler/parcellate)](https://img.shields.io/github/license/GalKepler/parcellate)
 
 A simple tool for extracting regional statistics from scalar neuroimaging maps.
 
