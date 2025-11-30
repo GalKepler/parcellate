@@ -4,3 +4,4 @@ myst-parser>=3.0
 sphinx-autodoc-typehints>=2.2
 sphinx-copybutton>=0.5
 sphinx-design>=0.6
+sphinx-rtd-theme>=3.0
