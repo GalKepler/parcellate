@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import importlib.metadata
+import sys
 from datetime import datetime
 from pathlib import Path
-import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -11,7 +11,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 project = "parcellate"
 author = "parcellate contributors"
 current_year = datetime.now().year
-copyright = f"{current_year}, {author}"
+package_copyright = f"{current_year}, {author}"
 
 try:
     release = importlib.metadata.version("parcellate")
@@ -19,16 +19,12 @@ except importlib.metadata.PackageNotFoundError:
     release = "0.0.0"
 
 extensions = [
-    "myst_parser",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
-    "sphinx_copybutton",
-    "sphinx_design",
-    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.coverage",
+    "sphinx.ext.githubpages",
 ]
 
 myst_enable_extensions = [
@@ -55,7 +51,7 @@ intersphinx_mapping = {
 
 todo_include_todos = True
 
-html_theme = "furo"
+html_theme = "sphinx_rtd_theme"
 html_title = "parcellate documentation"
 html_static_path = ["_static"]
 html_css_files: list[str] = []
