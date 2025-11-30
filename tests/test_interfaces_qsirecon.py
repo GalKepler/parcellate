@@ -18,6 +18,7 @@ from parcellate.interfaces.qsirecon.models import (
 from parcellate.interfaces.qsirecon.planner import _space_match, plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.qsirecon import (
     _as_list,
+    _build_output_path,
     _parse_log_level,
     _write_output,
     load_config,
@@ -106,6 +107,7 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
             'subjects = ["01", "02"]',
             'sessions = ["baseline"]',
             'mask = "mask.nii.gz"',
+            "force = true",
             'log_level = "debug"',
         ])
     )
@@ -117,6 +119,7 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
     assert config.subjects == ["01", "02"]
     assert config.sessions == ["baseline"]
     assert config.mask == Path("mask.nii.gz").expanduser().resolve()
+    assert config.force is True
     assert config.log_level == logging.DEBUG
 
 
@@ -180,6 +183,69 @@ def test_run_parcellations_writes_outputs(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     assert len(outputs) == 1
     assert outputs[0].exists()
+
+
+def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    context = SubjectContext("01")
+    atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
+    scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
+    recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = pd.DataFrame({"index": [1], "value": [2.0]})
+    existing.to_csv(out_path, sep="\t", index=False)
+
+    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs", lambda *args, **kwargs: [recon])
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
+        lambda recon: {atlas: [scalar]},
+    )
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.run_qsirecon_parcellation_workflow",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Should not run when outputs exist")),
+    )
+
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=False)
+
+    outputs = run_parcellations(config)
+
+    assert outputs == [out_path]
+    assert pd.read_csv(out_path, sep="\t").equals(existing)
+
+
+def test_run_parcellations_overwrites_when_forced(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    context = SubjectContext("01")
+    atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
+    scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
+    recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"index": [1], "value": [2.0]}).to_csv(out_path, sep="\t", index=False)
+
+    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs", lambda *args, **kwargs: [recon])
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
+        lambda recon: {atlas: [scalar]},
+    )
+
+    computed = pd.DataFrame({"index": [1], "value": [3.0]})
+    runner_called: list[bool] = []
+
+    def fake_runner(*args, **kwargs):
+        runner_called.append(True)
+        return [ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=computed)]
+
+    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.run_qsirecon_parcellation_workflow", fake_runner)
+
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=True)
+
+    outputs = run_parcellations(config)
+
+    assert outputs == [out_path]
+    assert runner_called
+    assert pd.read_csv(out_path, sep="\t").equals(computed)
 
 
 def test_discover_scalar_maps_builds_definitions(tmp_path: Path) -> None:

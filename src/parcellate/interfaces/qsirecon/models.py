@@ -80,4 +80,5 @@ class QSIReconConfig:
     mask: Path | None = None
     background_label: int = 0
     resampling_target: str | None = "data"
+    force: bool = False
     log_level: int = logging.INFO

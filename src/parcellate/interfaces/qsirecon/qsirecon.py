@@ -13,13 +13,21 @@ import logging
 from collections.abc import Iterable
 from pathlib import Path
 
+import pandas as pd
+
 try:  # Python 3.11+
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
     import tomli as tomllib  # type: ignore[import]
 
 from parcellate.interfaces.qsirecon.loader import load_qsirecon_inputs
-from parcellate.interfaces.qsirecon.models import ParcellationOutput, QSIReconConfig
+from parcellate.interfaces.qsirecon.models import (
+    AtlasDefinition,
+    ParcellationOutput,
+    QSIReconConfig,
+    ScalarMapDefinition,
+    SubjectContext,
+)
 from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
 
@@ -45,6 +53,7 @@ def load_config(config_path: Path) -> QSIReconConfig:
     - ``subjects``: List of subject identifiers to process.
     - ``sessions``: List of session identifiers to process.
     - ``mask``: Optional path to a brain mask to apply during parcellation.
+    - ``force``: Whether to overwrite existing parcellation outputs.
     - ``log_level``: Logging verbosity (e.g., ``INFO``, ``DEBUG``).
     """
 
@@ -58,6 +67,7 @@ def load_config(config_path: Path) -> QSIReconConfig:
 
     mask_value = data.get("mask")
     mask = Path(mask_value).expanduser().resolve() if mask_value else None
+    force = bool(data.get("force", False))
     log_level = _parse_log_level(data.get("log_level"))
 
     return QSIReconConfig(
@@ -66,6 +76,7 @@ def load_config(config_path: Path) -> QSIReconConfig:
         subjects=subjects,
         sessions=sessions,
         mask=mask,
+        force=force,
         log_level=log_level,
     )
 
@@ -80,35 +91,51 @@ def _as_list(value: Iterable[str] | str | None) -> list[str] | None:
     return list(value)
 
 
+def _build_output_path(
+    context: SubjectContext,
+    atlas: AtlasDefinition,
+    scalar_map: ScalarMapDefinition,
+    destination: Path,
+) -> Path:
+    """Construct the output path for a parcellation result."""
+
+    workflow = scalar_map.recon_workflow or "parcellate"
+    base = destination / f"qsirecon-{workflow}"
+
+    subject_dir = base / f"sub-{context.subject_id}"
+    if context.session_id:
+        subject_dir = subject_dir / f"ses-{context.session_id}"
+
+    output_dir = subject_dir / "dwi" / f"atlas-{atlas.name}"
+
+    entities: list[str] = [context.label]
+    space = atlas.space or scalar_map.space
+    entities.append(f"atlas-{atlas.name}")
+    if space:
+        entities.append(f"space-{space}")
+    if atlas.resolution:
+        entities.append(f"res-{atlas.resolution}")
+    if scalar_map.model:
+        entities.append(f"model-{scalar_map.model}")
+    entities.append(f"param-{scalar_map.param}")
+    if scalar_map.desc:
+        entities.append(f"desc-{scalar_map.desc}")
+
+    filename = "_".join([*entities, "parc"]) + ".tsv"
+    return output_dir / filename
+
+
 def _write_output(result: ParcellationOutput, destination: Path) -> Path:
     """Write a parcellation output to disk using a QSIRecon-like layout."""
 
-    workflow = result.scalar_map.recon_workflow or "parcellate"
-    base = destination / f"qsirecon-{workflow}"
+    out_path = _build_output_path(
+        context=result.context,
+        atlas=result.atlas,
+        scalar_map=result.scalar_map,
+        destination=destination,
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    subject_dir = base / f"sub-{result.context.subject_id}"
-    if result.context.session_id:
-        subject_dir = subject_dir / f"ses-{result.context.session_id}"
-
-    # QSIRecon organizes diffusion derivatives under ``dwi``
-    output_dir = subject_dir / "dwi" / f"atlas-{result.atlas.name}"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    entities: list[str] = [result.context.label]
-    space = result.atlas.space or result.scalar_map.space
-    entities.append(f"atlas-{result.atlas.name}")
-    if space:
-        entities.append(f"space-{space}")
-    if result.atlas.resolution:
-        entities.append(f"res-{result.atlas.resolution}")
-    if result.scalar_map.model:
-        entities.append(f"model-{result.scalar_map.model}")
-    entities.append(f"param-{result.scalar_map.param}")
-    if result.scalar_map.desc:
-        entities.append(f"desc-{result.scalar_map.desc}")
-
-    filename = "_".join([*entities, "parc"]) + ".tsv"
-    out_path = output_dir / filename
     result.stats_table.to_csv(out_path, sep="\t", index=False)
     LOGGER.debug("Wrote parcellation output to %s", out_path)
     return out_path
@@ -132,9 +159,33 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
     outputs: list[Path] = []
     for recon in recon_inputs:
         plan = plan_qsirecon_parcellation_workflow(recon)
-        jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
-        for result in jobs:
-            outputs.append(_write_output(result, destination=config.output_dir))
+        pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
+        reused_outputs: list[Path] = []
+
+        for atlas, scalar_maps in plan.items():
+            remaining: list[ScalarMapDefinition] = []
+            for scalar_map in scalar_maps:
+                out_path = _build_output_path(
+                    context=recon.context,
+                    atlas=atlas,
+                    scalar_map=scalar_map,
+                    destination=config.output_dir,
+                )
+                if not config.force and out_path.exists():
+                    LOGGER.info("Reusing existing parcellation output at %s", out_path)
+                    _ = pd.read_csv(out_path, sep="\t")
+                    reused_outputs.append(out_path)
+                else:
+                    remaining.append(scalar_map)
+            if remaining:
+                pending_plan[atlas] = remaining
+
+        if pending_plan:
+            jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
+            for result in jobs:
+                outputs.append(_write_output(result, destination=config.output_dir))
+
+        outputs.extend(reused_outputs)
     LOGGER.info("Finished writing %d parcellation files", len(outputs))
     return outputs
 
