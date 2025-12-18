@@ -230,6 +230,22 @@ def mad_median(values: np.ndarray) -> float:
     return float(mad)
 
 
+def volsum(values: np.ndarray) -> float:
+    """Compute the sum of values.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        The array of values to compute the sum from.
+
+    Returns
+    -------
+    float
+        The sum of the values.
+    """
+    return float(np.nansum(values))
+
+
 # define builtin statistics
 BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="volume_mm3", function=volume, requires_image=True),
@@ -244,4 +260,5 @@ BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="mean", function=np.nanmean),
     Statistic(name="std", function=np.nanstd),
     Statistic(name="median", function=np.nanmedian),
+    Statistic(name="sum", function=volsum),
 ]

@@ -8,7 +8,11 @@ from typing import ClassVar, Literal
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from nilearn.datasets import load_mni152_brain_mask, load_mni152_gm_mask, load_mni152_wm_mask
+from nilearn.datasets import (
+    load_mni152_brain_mask,
+    load_mni152_gm_mask,
+    load_mni152_wm_mask,
+)
 from nilearn.image import resample_to_img
 
 from parcellate.metrics.base import Statistic
@@ -183,7 +187,10 @@ class VolumetricParcellator:
         return nib.Nifti1Image(atlas_data, self._prepared_atlas_img.affine, self._prepared_atlas_img.header)
 
     def _prepare_map(
-        self, source: nib.Nifti1Image, reference: nib.Nifti1Image, interpolation: str = "nearest"
+        self,
+        source: nib.Nifti1Image,
+        reference: nib.Nifti1Image,
+        interpolation: str = "nearest",
     ) -> nib.Nifti1Image:
         """Resample source image to reference image grid if needed.
 
@@ -199,7 +206,13 @@ class VolumetricParcellator:
         nib.Nifti1Image
             Resampled image.
         """
-        return resample_to_img(source, reference, interpolation=interpolation, force_resample=True, copy_header=True)
+        return resample_to_img(
+            source,
+            reference,
+            interpolation=interpolation,
+            force_resample=True,
+            copy_header=True,
+        )
 
     def _build_regions(self, labels: Mapping[int, str] | Sequence[str] | None) -> tuple[int, ...]:
         """
@@ -250,8 +263,14 @@ class VolumetricParcellator:
             if fallback is None:
                 return BUILTIN_STATISTICS
             return fallback
+        if isinstance(stat_functions, Mapping):
+            prepared = [Statistic(name, func) for name, func in stat_functions.items()]
+        elif isinstance(stat_functions, Sequence):
+            if all(isinstance(s, Statistic) for s in stat_functions):
+                prepared = list(stat_functions)
+            else:
+                raise MissingStatisticalFunctionError(message="Statistic sequence must contain Statistic instances.")
 
-        prepared = [Statistic(name, func) for name, func in stat_functions.items()]
         if not prepared or len(prepared) == 0:
             raise MissingStatisticalFunctionError()
         return prepared
