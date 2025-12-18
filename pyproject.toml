@@ -1,6 +1,6 @@
 [project]
 name = "parcellate"
-version = "0.0.1"
+version = "0.1.0"
 description = "A simple tool for extracting regional statistics from scalar neuroimaging maps."
 authors = [{ name = "Gal Kepler", email = "galkepler@gmail.com" }]
 readme = "README.md"
