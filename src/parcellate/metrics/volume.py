@@ -8,29 +8,23 @@ import numpy as np
 from parcellate.metrics.base import Statistic
 
 
-def volume(parcel_mask: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
+def volume(parcel_values: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
     """Compute the actual tissue volume within a mask using modulated images.
 
     Parameters
     ----------
-    parcel_mask : np.ndarray
-        A boolean mask (or integer labels) of the ROI.
+    parcel_values : np.ndarray
+        The modulated tissue segment values within the ROI.
     scalar_img : nib.Nifti1Image
         The modulated tissue segment (e.g., mwp1.nii).
     """
-    # Load the intensity data from the image
-    scalar_data = scalar_img.get_fdata()
-
-    # Ensure the mask is boolean
-    mask = parcel_mask.astype(bool)
-
     # Calculate the volume of a single voxel in mm^3
     voxel_sizes = scalar_img.header.get_zooms()[:3]
     voxel_volume = np.prod(voxel_sizes)
 
     # Correct step: Sum the intensities within the mask
     # This represents the sum of tissue fractions/volume units
-    tissue_sum = np.sum(scalar_data[mask])
+    tissue_sum = np.sum(parcel_values)
 
     # Total volume in mm^3
     total_volume = tissue_sum * voxel_volume
