@@ -19,6 +19,7 @@ def load_qsirecon_inputs(
     root: Path,
     subjects: Iterable[str] | None = None,
     sessions: Iterable[str] | None = None,
+    atlases: Iterable[AtlasDefinition] | None = None,
 ) -> list[ReconInput]:
     """Discover scalar maps and atlases for subjects/sessions in a QSIRecon derivative."""
 
@@ -31,7 +32,7 @@ def load_qsirecon_inputs(
     entities = layout.get_entities()
     subj_list = list(subjects) if subjects else layout.get_subjects()
     recon_inputs: list[ReconInput] = []
-    atlases = discover_atlases(layout=layout)
+    atlas_definitions = list(atlases) if atlases else discover_atlases(layout=layout)
     for subject_id in subj_list:
         if sessions:
             ses_list = list(sessions)
@@ -46,7 +47,7 @@ def load_qsirecon_inputs(
                 ReconInput(
                     context=context,
                     scalar_maps=scalar_maps,
-                    atlases=atlases,
+                    atlases=atlas_definitions,
                     transforms=(),
                 )
             )
@@ -141,7 +142,19 @@ def discover_atlases(
     return atlases
 
 
-def _parameter_name(fobj) -> str:
+def _parameter_name(fobj: object) -> str:
+    """Extract parameter name from a BIDS file object.
+
+    Parameters
+    ----------
+    fobj : object
+        A BIDS file object from pybids.
+
+    Returns
+    -------
+    str
+        The parameter name.
+    """
     entities = fobj.get_entities()
     param = entities.get("param")
     if not param:
@@ -151,14 +164,40 @@ def _parameter_name(fobj) -> str:
     return param
 
 
-def _scalar_name(fobj) -> str:
+def _scalar_name(fobj: object) -> str:
+    """Construct a scalar map name from a BIDS file object.
+
+    Parameters
+    ----------
+    fobj : object
+        A BIDS file object from pybids.
+
+    Returns
+    -------
+    str
+        The constructed scalar map name.
+    """
     entities = fobj.get_entities()
     name_parts = [entities.get("model"), _parameter_name(fobj), entities.get("desc")]
     name = "-".join(part for part in name_parts if part)
     return name or Path(fobj.path).stem
 
 
-def _workflow_name(layout, fobj) -> str:
+def _workflow_name(layout: BIDSLayout, fobj: object) -> str:
+    """Extract workflow name from a BIDS file object.
+
+    Parameters
+    ----------
+    layout : BIDSLayout
+        The BIDS layout instance.
+    fobj : object
+        A BIDS file object from pybids.
+
+    Returns
+    -------
+    str
+        The workflow name.
+    """
     entities = fobj.get_entities()
     workflow = entities.get("recon_workflow")
     if not workflow:

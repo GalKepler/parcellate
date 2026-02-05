@@ -48,12 +48,13 @@ def test_fit_and_transform_compute_basic_statistics() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    assert first["volume_mm3"] == pytest.approx(2.0)
+    # volume_mm3 = sum of tissue intensities * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
 
     assert second["mean"] == pytest.approx(np.nanmean(region2_values))
     assert second["median"] == pytest.approx(np.nanmedian(region2_values))
     assert second["std"] == pytest.approx(np.nanstd(region2_values))
-    assert second["volume_mm3"] == pytest.approx(4.0)
+    assert second["volume_mm3"] == pytest.approx(np.nansum(region2_values))
 
 
 def test_masked_atlas_excludes_voxels() -> None:
@@ -143,12 +144,13 @@ def test_empty_parcel_handling() -> None:
     assert np.isnan(first["mean"])
     assert np.isnan(first["median"])
     assert np.isnan(first["std"])
-    assert first["volume_mm3"] == pytest.approx(2.0)
+    # With all NaN values, nansum returns 0.0, so volume is 0.0
+    assert first["volume_mm3"] == pytest.approx(0.0)
 
     assert np.isnan(second["mean"])
     assert np.isnan(second["median"])
     assert np.isnan(second["std"])
-    assert second["volume_mm3"] == pytest.approx(4.0)
+    assert second["volume_mm3"] == pytest.approx(0.0)
 
 
 def test_no_valid_voxels_in_parcel() -> None:
@@ -178,12 +180,13 @@ def test_no_valid_voxels_in_parcel() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    assert first["volume_mm3"] == pytest.approx(2.0)
+    # volume_mm3 = nansum of tissue intensities * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
 
     assert second["mean"] == pytest.approx(np.nanmean(region2_values))
     assert second["median"] == pytest.approx(np.nanmedian(region2_values))
     assert second["std"] == pytest.approx(np.nanstd(region2_values))
-    assert second["volume_mm3"] == pytest.approx(4.0)
+    assert second["volume_mm3"] == pytest.approx(np.nansum(region2_values))
 
 
 def test_atlas_is_filename() -> None:
@@ -214,7 +217,8 @@ def test_atlas_is_filename() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    assert first["volume_mm3"] == pytest.approx(2.0)
+    # volume_mm3 = sum of tissue intensities * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
 
 
 def test_lut_missing_columns() -> None:
@@ -357,3 +361,164 @@ def test_region_not_in_index() -> None:
 
     assert 3 not in df["index"].values
     assert df.columns.tolist() == ["index", "label"]
+
+
+def test_stat_functions_invalid_type() -> None:
+    """Test that invalid stat_functions type raises MissingStatisticalFunctionError."""
+    from parcellate.parcellation.volume import MissingStatisticalFunctionError
+
+    atlas_img = _atlas()
+
+    # Passing an invalid type (e.g., an integer) should raise an error
+    # Note: strings are Sequences so they go through a different code path
+    with pytest.raises(MissingStatisticalFunctionError) as excinfo:
+        VolumetricParcellator(atlas_img, stat_functions=42)
+
+    assert "must be a Mapping or Sequence" in str(excinfo.value)
+
+
+def test_stat_functions_invalid_sequence_contents() -> None:
+    """Test that sequence with non-Statistic items raises MissingStatisticalFunctionError."""
+    from parcellate.parcellation.volume import MissingStatisticalFunctionError
+
+    atlas_img = _atlas()
+
+    # Passing a sequence with non-Statistic items should raise an error
+    with pytest.raises(MissingStatisticalFunctionError) as excinfo:
+        VolumetricParcellator(atlas_img, stat_functions=["not", "statistics"])
+
+    assert "must contain Statistic instances" in str(excinfo.value)
+
+
+def test_stat_functions_as_sequence_of_statistics() -> None:
+    """Test that valid sequence of Statistic objects works."""
+    from parcellate.metrics.base import Statistic
+
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    # Create a list of Statistic objects
+    stats = [
+        Statistic(name="custom_mean", function=np.nanmean),
+        Statistic(name="custom_std", function=np.nanstd),
+    ]
+
+    parcellator = VolumetricParcellator(atlas_img, stat_functions=stats)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    assert "custom_mean" in df.columns
+    assert "custom_std" in df.columns
+
+
+def test_resampling_target_labels() -> None:
+    """Test that resampling_target='labels' works correctly."""
+    atlas_img = _atlas()
+    scalar_data = np.ones((4, 4, 4), dtype=np.float32)  # Different size than atlas
+    scalar_img = nib.Nifti1Image(scalar_data, np.eye(4) * 0.5)  # Different voxel size
+
+    parcellator = VolumetricParcellator(atlas_img, resampling_target="labels")
+    parcellator.fit(scalar_img)
+
+    # Reference should be the atlas
+    assert parcellator.ref_img == atlas_img
+
+
+def test_mask_as_none_explicitly() -> None:
+    """Test that explicitly passing mask=None works."""
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    parcellator = VolumetricParcellator(atlas_img, mask=None)
+    assert parcellator.mask is None
+
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    # Should work without mask
+    assert len(df) == 2  # Two regions
+
+
+def test_lut_from_tsv_file(tmp_path) -> None:
+    """Test loading LUT from a TSV file."""
+    atlas_img = _atlas()
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    # Create a TSV file
+    lut_path = tmp_path / "lut.tsv"
+    lut_df = pd.DataFrame({
+        "index": [0, 1, 2],
+        "label": ["Background", "Region_A", "Region_B"],
+    })
+    lut_df.to_csv(lut_path, sep="\t", index=False)
+
+    parcellator = VolumetricParcellator(atlas_img, lut=lut_path)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    assert df.loc[df["index"] == 1, "label"].iloc[0] == "Region_A"
+    assert df.loc[df["index"] == 2, "label"].iloc[0] == "Region_B"
+
+
+def test_background_label_custom() -> None:
+    """Test custom background label."""
+    # Create atlas where 1 is background instead of 0
+    data = np.array(
+        [
+            [[1, 2], [2, 3]],
+            [[1, 3], [3, 3]],
+        ],
+        dtype=np.int16,
+    )
+    atlas_img = nib.Nifti1Image(data, np.eye(4))
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    parcellator = VolumetricParcellator(atlas_img, background_label=1)
+    parcellator.fit(scalar_img)
+    df = parcellator.transform(scalar_img)
+
+    # Should only have regions 2 and 3, not 1
+    assert 1 not in df["index"].values
+    assert 2 in df["index"].values
+    assert 3 in df["index"].values
+
+
+def test_transform_with_same_path_as_fit_reuses_prepared_image(mocker) -> None:
+    """Test that transform() with the same path as fit() reuses the prepared image."""
+    atlas_img = _atlas()
+    scalar_img_path = "scalar.nii"
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2)), atlas_img.affine)
+    nib.save(scalar_img, scalar_img_path)
+
+    parcellator = VolumetricParcellator(atlas_img)
+    parcellator.fit(scalar_img_path)
+
+    prepare_map_spy = mocker.spy(parcellator, "_prepare_map")
+
+    df = parcellator.transform(scalar_img_path)
+
+    assert df is not None
+    # _prepare_map should not be called in transform because the image is cached
+    assert prepare_map_spy.call_count == 0
+
+
+def test_transform_with_different_path_resamples(mocker) -> None:
+    """Test that transform() with a different path resamples the image."""
+    atlas_img = _atlas()
+    scalar_img_path_1 = "scalar1.nii"
+    scalar_img_path_2 = "scalar2.nii"
+    scalar_img_1 = nib.Nifti1Image(np.ones((2, 2, 2)), atlas_img.affine)
+    scalar_img_2 = nib.Nifti1Image(np.zeros((2, 2, 2)), atlas_img.affine)
+    nib.save(scalar_img_1, scalar_img_path_1)
+    nib.save(scalar_img_2, scalar_img_path_2)
+
+    parcellator = VolumetricParcellator(atlas_img)
+    parcellator.fit(scalar_img_path_1)
+
+    prepare_map_spy = mocker.spy(parcellator, "_prepare_map")
+
+    df = parcellator.transform(scalar_img_path_2)
+
+    assert df is not None
+    # _prepare_map should be called because the image is different
+    assert prepare_map_spy.call_count == 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import logging
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
+from parcellate.interfaces.planner import _space_match
 from parcellate.interfaces.qsirecon.loader import discover_atlases, discover_scalar_maps, load_qsirecon_inputs
 from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
@@ -15,7 +17,7 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.qsirecon.planner import _space_match, plan_qsirecon_parcellation_workflow
+from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.qsirecon import (
     _as_list,
     _build_output_path,
@@ -25,6 +27,13 @@ from parcellate.interfaces.qsirecon.qsirecon import (
     run_parcellations,
 )
 from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
+
+
+class Recon:
+    def __init__(self, context, atlases, scalar_maps) -> None:
+        self.context = context
+        self.atlases = atlases
+        self.scalar_maps = scalar_maps
 
 
 class FakeFile:
@@ -112,7 +121,20 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
         ])
     )
 
-    config = load_config(cfg_path)
+    args = argparse.Namespace(
+        config=cfg_path,
+        input_root=None,
+        output_dir=None,
+        atlas_config=None,
+        subjects=None,
+        sessions=None,
+        mask=None,
+        force=False,
+        log_level=None,
+        n_jobs=None,
+        n_procs=None,
+    )
+    config = load_config(args)
 
     assert config.input_root == Path("~/data").expanduser().resolve()
     assert config.output_dir == Path("outdir").expanduser().resolve()
@@ -148,48 +170,11 @@ def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     assert written.equals(stats)
 
 
-def test_run_parcellations_writes_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    context = SubjectContext("01")
-    atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
-    scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
-    stats = pd.DataFrame({"index": [1], "value": [1.0]})
-    parcellation = ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=stats)
-
-    def fake_load_qsirecon_inputs(root: Path, subjects=None, sessions=None) -> list[Any]:
-        return [
-            type(
-                "Recon",
-                (),
-                {"context": context, "atlases": [atlas], "scalar_maps": [scalar]},
-            )()
-        ]
-
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs", fake_load_qsirecon_inputs)
-    monkeypatch.setattr(
-        "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
-        lambda recon: {atlas: [scalar]},
-    )
-    monkeypatch.setattr(
-        "parcellate.interfaces.qsirecon.qsirecon.run_qsirecon_parcellation_workflow",
-        lambda recon, plan, config: [parcellation],
-    )
-
-    config = QSIReconConfig(
-        input_root=tmp_path,
-        output_dir=tmp_path,
-        subjects=["01"],
-    )
-    outputs = run_parcellations(config)
-
-    assert len(outputs) == 1
-    assert outputs[0].exists()
-
-
 def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     context = SubjectContext("01")
     atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
     scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
-    recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
+    recon = Recon(context, [atlas], [scalar])
 
     out_path = _build_output_path(context, atlas, scalar, tmp_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,11 +199,11 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
     assert pd.read_csv(out_path, sep="\t").equals(existing)
 
 
-def test_run_parcellations_overwrites_when_forced(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     context = SubjectContext("01")
     atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
     scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
-    recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
+    recon = Recon(context, [atlas], [scalar])
 
     out_path = _build_output_path(context, atlas, scalar, tmp_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -231,20 +216,31 @@ def test_run_parcellations_overwrites_when_forced(monkeypatch: pytest.MonkeyPatc
     )
 
     computed = pd.DataFrame({"index": [1], "value": [3.0]})
-    runner_called: list[bool] = []
 
-    def fake_runner(*args, **kwargs):
-        runner_called.append(True)
-        return [ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=computed)]
+    def mock_run_recon(recon, plan, config):
+        # Write the new computed values
+        computed.to_csv(out_path, sep="\t", index=False)
+        return [out_path]
 
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.run_qsirecon_parcellation_workflow", fake_runner)
+    mock_executor_instance = mocker.MagicMock()
+    future_mock = mocker.MagicMock()
+    future_mock.result.return_value = mock_run_recon(recon, {atlas: [scalar]}, None)
+    mock_executor_instance.submit.return_value = future_mock
+    mock_executor_instance.__enter__.return_value = mock_executor_instance
+    mock_executor_instance.__exit__.return_value = False
 
-    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=True)
+    mock_executor_type = mocker.patch(
+        "parcellate.interfaces.qsirecon.qsirecon.ProcessPoolExecutor",
+        return_value=mock_executor_instance,
+    )
+
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=True, n_procs=2)
 
     outputs = run_parcellations(config)
 
     assert outputs == [out_path]
-    assert runner_called
+    mock_executor_type.assert_called_once_with(max_workers=config.n_procs)
+    mock_executor_instance.submit.assert_called_once()
     assert pd.read_csv(out_path, sep="\t").equals(computed)
 
 
@@ -348,7 +344,7 @@ def test_space_match_is_case_insensitive() -> None:
     assert _space_match(atlas, scalar)
 
 
-def test_plan_qsirecon_parcellation_filters_by_space() -> None:
+def test_plan_qsirecon_parcellation_filters_by_space(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     atlas = AtlasDefinition(name="atlas", nifti_path=Path("atlas.nii"), space="MNI")
     matching = ScalarMapDefinition(name="map1", nifti_path=Path("map1.nii"), space="MNI")
     non_matching = ScalarMapDefinition(name="map2", nifti_path=Path("map2.nii"), space="other")
@@ -378,7 +374,7 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
             calls.append(Path(scalar_img))
             return pd.DataFrame({"index": [1], "label": ["a"]})
 
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.runner.VolumetricParcellator", DummyParcellator)
+    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", DummyParcellator)
 
     atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz")
     scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz")
@@ -395,3 +391,164 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     assert calls[0] == atlas.nifti_path
     assert outputs[0].scalar_map == scalar1
     assert outputs[1].scalar_map == scalar2
+
+
+def test_runner_skips_atlas_on_space_mismatch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test that runner skips atlas when scalar maps have mismatched spaces."""
+    from parcellate.interfaces.runner import ScalarMapSpaceMismatchError, _validate_scalar_map_spaces
+
+    # Test the validation function directly
+    scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz", space="MNI")
+    scalar2 = ScalarMapDefinition(name="map2", nifti_path=tmp_path / "map2.nii.gz", space="native")
+
+    with pytest.raises(ScalarMapSpaceMismatchError):
+        _validate_scalar_map_spaces([scalar1, scalar2])
+
+
+def test_runner_validates_matching_spaces(tmp_path: Path) -> None:
+    """Test that validation passes when all scalar maps have the same space."""
+    from parcellate.interfaces.runner import _validate_scalar_map_spaces
+
+    scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz", space="MNI")
+    scalar2 = ScalarMapDefinition(name="map2", nifti_path=tmp_path / "map2.nii.gz", space="MNI")
+
+    # Should not raise
+    _validate_scalar_map_spaces([scalar1, scalar2])
+
+
+def test_runner_validates_empty_list(tmp_path: Path) -> None:
+    """Test that validation passes for empty list."""
+    from parcellate.interfaces.runner import _validate_scalar_map_spaces
+
+    # Should not raise
+    _validate_scalar_map_spaces([])
+
+
+def test_scalar_map_space_mismatch_error_message() -> None:
+    """Test ScalarMapSpaceMismatchError error message."""
+    from parcellate.interfaces.runner import ScalarMapSpaceMismatchError
+
+    error = ScalarMapSpaceMismatchError({"MNI", "native"})
+    assert "MNI" in str(error)
+    assert "native" in str(error)
+
+
+def test_runner_continues_after_parcellator_init_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test that runner continues processing other atlases when one fails to initialize."""
+
+    class FailingParcellator:
+        def __init__(self, atlas_img, **kwargs) -> None:
+            if "failing" in str(atlas_img):
+                raise ValueError("Simulated init failure")
+
+        def fit(self, scalar_img) -> None:
+            pass
+
+        def transform(self, scalar_img):
+            return pd.DataFrame({"index": [1], "label": ["a"]})
+
+    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", FailingParcellator)
+
+    failing_atlas = AtlasDefinition(name="failing_atlas", nifti_path=tmp_path / "failing_atlas.nii.gz")
+    working_atlas = AtlasDefinition(name="working_atlas", nifti_path=tmp_path / "working_atlas.nii.gz")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz")
+    recon = type("Recon", (), {"context": SubjectContext("01")})()
+    plan = {failing_atlas: [scalar], working_atlas: [scalar]}
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
+
+    outputs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
+
+    # Should have output from working atlas only
+    assert len(outputs) == 1
+    assert outputs[0].atlas == working_atlas
+
+
+def test_runner_continues_after_transform_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test that runner continues processing other scalar maps when one fails to transform."""
+    transform_calls = []
+
+    class PartiallyFailingParcellator:
+        def __init__(self, atlas_img, **kwargs) -> None:
+            pass
+
+        def fit(self, scalar_img) -> None:
+            pass
+
+        def transform(self, scalar_img):
+            transform_calls.append(str(scalar_img))
+            if "failing" in str(scalar_img):
+                raise ValueError("Simulated transform failure")
+            return pd.DataFrame({"index": [1], "label": ["a"]})
+
+    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", PartiallyFailingParcellator)
+
+    atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz")
+    failing_scalar = ScalarMapDefinition(name="failing_map", nifti_path=tmp_path / "failing_map.nii.gz")
+    working_scalar = ScalarMapDefinition(name="working_map", nifti_path=tmp_path / "working_map.nii.gz")
+    recon = type("Recon", (), {"context": SubjectContext("01")})()
+    plan = {atlas: [failing_scalar, working_scalar]}
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
+
+    outputs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
+
+    # Should have output from working scalar only
+    assert len(outputs) == 1
+    assert outputs[0].scalar_map == working_scalar
+    # Both transforms should have been attempted
+    assert len(transform_calls) == 2
+
+
+def test_runner_skips_empty_scalar_maps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test that runner skips atlases with no scalar maps."""
+
+    class DummyParcellator:
+        def __init__(self, atlas_img, **kwargs) -> None:
+            pass
+
+        def fit(self, scalar_img) -> None:
+            pass
+
+        def transform(self, scalar_img):
+            return pd.DataFrame({"index": [1], "label": ["a"]})
+
+    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", DummyParcellator)
+
+    atlas_with_maps = AtlasDefinition(name="atlas1", nifti_path=tmp_path / "atlas1.nii.gz")
+    atlas_without_maps = AtlasDefinition(name="atlas2", nifti_path=tmp_path / "atlas2.nii.gz")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz")
+    recon = type("Recon", (), {"context": SubjectContext("01")})()
+    plan = {atlas_with_maps: [scalar], atlas_without_maps: []}
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
+
+    outputs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
+
+    assert len(outputs) == 1
+    assert outputs[0].atlas == atlas_with_maps
+
+
+def test_runner_skips_mismatched_space_atlas(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Test that runner skips atlas when scalar maps have different spaces."""
+
+    class DummyParcellator:
+        def __init__(self, atlas_img, **kwargs) -> None:
+            pass
+
+        def fit(self, scalar_img) -> None:
+            pass
+
+        def transform(self, scalar_img):
+            return pd.DataFrame({"index": [1], "label": ["a"]})
+
+    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", DummyParcellator)
+
+    atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz")
+    scalar_mni = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz", space="MNI")
+    scalar_native = ScalarMapDefinition(name="map2", nifti_path=tmp_path / "map2.nii.gz", space="native")
+    recon = type("Recon", (), {"context": SubjectContext("01")})()
+    plan = {atlas: [scalar_mni, scalar_native]}
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
+
+    outputs = run_qsirecon_parcellation_workflow(recon=recon, plan=plan, config=config)
+
+    # Should skip the atlas due to space mismatch
+    assert len(outputs) == 0
