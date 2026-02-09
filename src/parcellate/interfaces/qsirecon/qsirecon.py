@@ -133,7 +133,7 @@ def _build_output_path(
     if context.session_id:
         subject_dir = subject_dir / f"ses-{context.session_id}"
 
-    output_dir = subject_dir / "dwi"
+    output_dir = subject_dir / "dwi" / f"atlas-{atlas.name}"
 
     entities: list[str] = [context.label]
     space = atlas.space or scalar_map.space

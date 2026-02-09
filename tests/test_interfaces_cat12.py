@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 import pytest
@@ -18,6 +17,17 @@ from parcellate.interfaces.cat12.cat12 import (
     load_config,
     run_parcellations,
 )
+from parcellate.interfaces.cat12.cli import (
+    SubjectSession,
+    _parse_atlases_from_env,
+    build_arg_parser,
+    config_from_env,
+    load_subjects_from_csv,
+    main,
+)
+from parcellate.interfaces.cat12.cli import (
+    _parse_log_level as cli_parse_log_level,
+)
 from parcellate.interfaces.cat12.loader import (
     TISSUE_PATTERNS,
     _build_search_path,
@@ -29,6 +39,7 @@ from parcellate.interfaces.cat12.loader import (
     load_cat12_inputs,
 )
 from parcellate.interfaces.cat12.models import (
+    AtlasConfigurationError,
     AtlasDefinition,
     Cat12Config,
     ParcellationOutput,
@@ -339,7 +350,14 @@ def test_scalar_map_space_mismatch_error_message() -> None:
 
 
 class DummyParcellator:
-    def __init__(self, atlas_img, lut=None, mask=None, background_label=0, resampling_target="data") -> None:
+    def __init__(
+        self,
+        atlas_img,
+        lut=None,
+        mask=None,
+        background_label=0,
+        resampling_target="data",
+    ) -> None:
         pass
 
     def fit(self, scalar_img) -> None:
@@ -357,7 +375,13 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz", tissue_type=TissueType.GM)
     scalar2 = ScalarMapDefinition(name="map2", nifti_path=tmp_path / "map2.nii.gz", tissue_type=TissueType.WM)
     recon = type(
-        "Recon", (), {"context": SubjectContext("01"), "atlases": [atlas], "scalar_maps": [scalar1, scalar2]}
+        "Recon",
+        (),
+        {
+            "context": SubjectContext("01"),
+            "atlases": [atlas],
+            "scalar_maps": [scalar1, scalar2],
+        },
     )()
     plan = {atlas: [scalar1, scalar2]}
     config = Cat12Config(input_root=tmp_path, output_dir=tmp_path)
@@ -543,42 +567,37 @@ def test_write_output_creates_file(tmp_path: Path) -> None:
 def test_run_parcellations_writes_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Test run_parcellations writes outputs correctly."""
     context = SubjectContext("01")
-    atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz", space="MNI152NLin2009cAsym")
+    atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz", space="MNI152NLin2009cAsym")
     scalar = ScalarMapDefinition(
-        "map", nifti_path=tmp_path / "map.nii.gz", tissue_type=TissueType.GM, space="MNI152NLin2009cAsym"
+        name="GM-mwp1sub01",
+        nifti_path=tmp_path / "mwp1sub01.nii.gz",
+        tissue_type=TissueType.GM,
+        space="MNI152NLin2009cAsym",
     )
-    stats = pd.DataFrame({"index": [1], "value": [1.0]})
-    parcellation = ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=stats)
+    recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()  # type: ignore[call]
 
-    def fake_load_cat12_inputs(root: Path, atlases, subjects=None, sessions=None) -> list[Any]:
-        return [
-            type(
-                "Recon",
-                (),
-                {"context": context, "atlases": [atlas], "scalar_maps": [scalar]},
-            )()
-        ]
-
-    monkeypatch.setattr("parcellate.interfaces.cat12.cat12.load_cat12_inputs", fake_load_cat12_inputs)
+    monkeypatch.setattr(
+        "parcellate.interfaces.cat12.cat12.load_cat12_inputs",
+        lambda *args, **kwargs: [recon],
+    )
     monkeypatch.setattr(
         "parcellate.interfaces.cat12.cat12.plan_cat12_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
     monkeypatch.setattr(
         "parcellate.interfaces.cat12.cat12.run_cat12_parcellation_workflow",
-        lambda recon, plan, config: [parcellation],
+        lambda *args, **kwargs: [
+            ParcellationOutput(context, atlas, scalar, pd.DataFrame({"index": [1], "value": [2.0]}))
+        ],
     )
 
-    config = Cat12Config(
-        input_root=tmp_path,
-        output_dir=tmp_path,
-        atlases=[atlas],
-        subjects=["01"],
-    )
+    config = Cat12Config(input_root=tmp_path, output_dir=tmp_path, atlases=[atlas], force=True)
     outputs = run_parcellations(config)
-
     assert len(outputs) == 1
-    assert outputs[0].exists()
+    out_path = outputs[0]
+    assert out_path.exists()
+    written = pd.read_csv(out_path, sep="\t")
+    assert written.equals(pd.DataFrame({"index": [1], "value": [2.0]}))
 
 
 def test_run_parcellations_returns_empty_when_no_atlases(tmp_path: Path) -> None:
@@ -590,16 +609,19 @@ def test_run_parcellations_returns_empty_when_no_atlases(tmp_path: Path) -> None
         output_dir=tmp_path,
         atlases=None,
     )
-    with pytest.raises(ValueError, match="At least one atlas must be configured"):
+    with pytest.raises(AtlasConfigurationError):
         run_parcellations(config)
 
 
 def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Test run_parcellations reuses existing outputs when force=False."""
     context = SubjectContext("01")
-    atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz", space="MNI152NLin2009cAsym")
+    atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz", space="MNI152NLin2009cAsym")
     scalar = ScalarMapDefinition(
-        "map", nifti_path=tmp_path / "map.nii.gz", tissue_type=TissueType.GM, space="MNI152NLin2009cAsym"
+        name="map",
+        nifti_path=tmp_path / "map.nii.gz",
+        tissue_type=TissueType.GM,
+        space="MNI152NLin2009cAsym",
     )
     recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
 
@@ -608,7 +630,10 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
     existing = pd.DataFrame({"index": [1], "value": [2.0]})
     existing.to_csv(out_path, sep="\t", index=False)
 
-    monkeypatch.setattr("parcellate.interfaces.cat12.cat12.load_cat12_inputs", lambda *args, **kwargs: [recon])
+    monkeypatch.setattr(
+        "parcellate.interfaces.cat12.cat12.load_cat12_inputs",
+        lambda *args, **kwargs: [recon],
+    )
     monkeypatch.setattr(
         "parcellate.interfaces.cat12.cat12.plan_cat12_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
@@ -627,19 +652,6 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
 
 
 # --- CLI Tests ---
-
-
-from parcellate.interfaces.cat12.cli import (
-    SubjectSession,
-    _parse_atlases_from_env,
-    build_arg_parser,
-    config_from_env,
-    load_subjects_from_csv,
-    main,
-)
-from parcellate.interfaces.cat12.cli import (
-    _parse_log_level as cli_parse_log_level,
-)
 
 
 def test_load_subjects_from_csv(tmp_path: Path) -> None:

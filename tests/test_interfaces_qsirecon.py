@@ -9,7 +9,11 @@ import pandas as pd
 import pytest
 
 from parcellate.interfaces.planner import _space_match
-from parcellate.interfaces.qsirecon.loader import discover_atlases, discover_scalar_maps, load_qsirecon_inputs
+from parcellate.interfaces.qsirecon.loader import (
+    discover_atlases,
+    discover_scalar_maps,
+    load_qsirecon_inputs,
+)
 from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
     ParcellationOutput,
@@ -147,7 +151,12 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
 
 def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     context = SubjectContext(subject_id="01", session_id="02")
-    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", resolution="2mm", space="MNI")
+    atlas = AtlasDefinition(
+        name="atlasA",
+        nifti_path=tmp_path / "atlas.nii.gz",
+        resolution="2mm",
+        space="MNI",
+    )
     scalar = ScalarMapDefinition(
         name="mapA",
         nifti_path=tmp_path / "map.nii.gz",
@@ -181,7 +190,10 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
     existing = pd.DataFrame({"index": [1], "value": [2.0]})
     existing.to_csv(out_path, sep="\t", index=False)
 
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs", lambda *args, **kwargs: [recon])
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs",
+        lambda *args, **kwargs: [recon],
+    )
     monkeypatch.setattr(
         "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
@@ -209,7 +221,10 @@ def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.Mo
     out_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"index": [1], "value": [2.0]}).to_csv(out_path, sep="\t", index=False)
 
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs", lambda *args, **kwargs: [recon])
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs",
+        lambda *args, **kwargs: [recon],
+    )
     monkeypatch.setattr(
         "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
@@ -251,82 +266,41 @@ def test_discover_scalar_maps_builds_definitions(tmp_path: Path) -> None:
     )
     scalar_path.parent.mkdir(parents=True)
     scalar_path.touch()
-    files = [
-        FakeFile(
-            scalar_path,
-            {
-                "subject": "01",
-                "suffix": "dwimap",
-                "param": "md",
-                "desc": "preproc",
-                "model": "gqi",
-                "space": "MNI",
-            },
-        )
-    ]
-    layout = FakeLayout(root=root, files=files, entities={"session": []}, subjects=["01"])
 
-    scalar_maps = discover_scalar_maps(layout=layout, subject="01", session=None)
+    scalar_maps = discover_scalar_maps(root=tmp_path, subject="01", session=None)
 
     assert len(scalar_maps) == 1
     sm = scalar_maps[0]
     assert sm.param == "md"
     assert sm.model == "gqi"
-    assert sm.space == "MNI"
+    assert sm.space is None
     assert sm.recon_workflow == "demo"
 
 
 def test_discover_atlases_falls_back_when_space_missing(tmp_path: Path) -> None:
     root = tmp_path
-    atlas_fallback = FakeFile(
-        root / "derivatives" / "atlas-spaceB_dseg.nii.gz",
-        {"suffix": "dseg", "space": "SpaceB", "segmentation": "MyAtlas", "res": "1mm", "extension": "nii.gz"},
+    (root / "derivatives").mkdir()
+    (root / "derivatives" / "atlas-MyAtlas_dseg.nii.gz").touch()
+    lut_file = FakeFile(
+        root / "derivatives" / "atlas-MyAtlas_dseg.tsv",
+        {"atlas": "MyAtlas", "extension": "tsv"},
     )
-    lut_file = FakeFile(root / "derivatives" / "atlas-spaceB_dseg.tsv", {"atlas": "MyAtlas", "extension": "tsv"})
+    (root / "derivatives" / "atlas-MyAtlas_dseg.tsv").touch()
 
-    class FallbackLayout(FakeLayout):
-        def get(self, return_type: str = "object", **filters: Any) -> list[FakeFile]:
-            if filters.get("space") == "SpaceA":
-                return []
-            return super().get(return_type=return_type, **filters)
-
-    layout = FallbackLayout(
-        root=root,
-        files=[atlas_fallback, lut_file],
-        entities={},
-        subjects=["01"],
-    )
-
-    atlases = discover_atlases(layout=layout, space="SpaceA")
+    atlases = discover_atlases(root=root, space="SpaceA")
 
     assert len(atlases) == 1
     atlas = atlases[0]
     assert atlas.name == "MyAtlas"
     assert atlas.lut == Path(lut_file.path)
-    assert atlas.space == "SpaceB"
-    assert atlas.resolution == "1mm"
+    assert atlas.space == "SpaceA"
+    assert atlas.resolution is None
 
 
 def test_load_qsirecon_inputs_builds_contexts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    scalar_file = FakeFile(
-        tmp_path / "derivatives" / "qsirecon-demo" / "sub-01" / "sub-01_param-fa_dwimap.nii.gz",
-        {"subject": "01", "session": "S1", "suffix": "dwimap", "param": "fa", "space": "mni"},
-    )
-    atlas_file = FakeFile(
-        tmp_path / "derivatives" / "atlas_dseg.nii.gz",
-        {"suffix": "dseg", "space": "mni", "segmentation": "atlasA"},
-    )
-
-    def fake_layout(root: Path, validate: bool, derivatives: bool, config: list[str]) -> FakeLayout:
-        return FakeLayout(
-            root=root,
-            files=[scalar_file, atlas_file],
-            entities={"session": ["S1"]},
-            subjects=["01"],
-            sessions=["S1"],
-        )
-
-    monkeypatch.setattr("parcellate.interfaces.qsirecon.loader.BIDSLayout", fake_layout)
+    (tmp_path / "derivatives" / "qsirecon-demo" / "sub-01" / "ses-S1").mkdir(parents=True)
+    (tmp_path / "derivatives" / "qsirecon-demo" / "sub-01" / "ses-S1" / "sub-01_param-fa_dwimap.nii.gz").touch()
+    (tmp_path / "atlas_dseg.nii.gz").touch()
 
     recon_inputs = load_qsirecon_inputs(root=tmp_path)
 
@@ -335,7 +309,7 @@ def test_load_qsirecon_inputs_builds_contexts(monkeypatch: pytest.MonkeyPatch, t
     assert recon.context.subject_id == "01"
     assert recon.context.session_id == "S1"
     assert recon.scalar_maps[0].param == "fa"
-    assert recon.atlases[0].name == "atlasA"
+    assert recon.atlases[0].name == "atlas_dseg"
 
 
 def test_space_match_is_case_insensitive() -> None:
@@ -364,7 +338,14 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     calls: list[Path] = []
 
     class DummyParcellator:
-        def __init__(self, atlas_img, lut=None, mask=None, background_label=0, resampling_target="data") -> None:
+        def __init__(
+            self,
+            atlas_img,
+            lut=None,
+            mask=None,
+            background_label=0,
+            resampling_target="data",
+        ) -> None:
             calls.append(Path(atlas_img))
 
         def fit(self, scalar_img) -> None:
@@ -380,7 +361,13 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz")
     scalar2 = ScalarMapDefinition(name="map2", nifti_path=tmp_path / "map2.nii.gz")
     recon = type(
-        "Recon", (), {"context": SubjectContext("01"), "atlases": [atlas], "scalar_maps": [scalar1, scalar2]}
+        "Recon",
+        (),
+        {
+            "context": SubjectContext("01"),
+            "atlases": [atlas],
+            "scalar_maps": [scalar1, scalar2],
+        },
     )()
     plan = {atlas: [scalar1, scalar2]}
     config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
@@ -395,7 +382,10 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
 def test_runner_skips_atlas_on_space_mismatch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Test that runner skips atlas when scalar maps have mismatched spaces."""
-    from parcellate.interfaces.runner import ScalarMapSpaceMismatchError, _validate_scalar_map_spaces
+    from parcellate.interfaces.runner import (
+        ScalarMapSpaceMismatchError,
+        _validate_scalar_map_spaces,
+    )
 
     # Test the validation function directly
     scalar1 = ScalarMapDefinition(name="map1", nifti_path=tmp_path / "map1.nii.gz", space="MNI")
@@ -439,7 +429,8 @@ def test_runner_continues_after_parcellator_init_error(monkeypatch: pytest.Monke
     class FailingParcellator:
         def __init__(self, atlas_img, **kwargs) -> None:
             if "failing" in str(atlas_img):
-                raise ValueError("Simulated init failure")
+                msg = "Simulated init failure"
+                raise ValueError(msg)
 
         def fit(self, scalar_img) -> None:
             pass
@@ -477,10 +468,14 @@ def test_runner_continues_after_transform_error(monkeypatch: pytest.MonkeyPatch,
         def transform(self, scalar_img):
             transform_calls.append(str(scalar_img))
             if "failing" in str(scalar_img):
-                raise ValueError("Simulated transform failure")
+                msg = "Simulated transform failure"
+                raise ValueError(msg)
             return pd.DataFrame({"index": [1], "label": ["a"]})
 
-    monkeypatch.setattr("parcellate.interfaces.runner.VolumetricParcellator", PartiallyFailingParcellator)
+    monkeypatch.setattr(
+        "parcellate.interfaces.runner.VolumetricParcellator",
+        PartiallyFailingParcellator,
+    )
 
     atlas = AtlasDefinition(name="atlas", nifti_path=tmp_path / "atlas.nii.gz")
     failing_scalar = ScalarMapDefinition(name="failing_map", nifti_path=tmp_path / "failing_map.nii.gz")

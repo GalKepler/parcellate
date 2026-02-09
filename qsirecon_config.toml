@@ -7,8 +7,8 @@ log_level = "DEBUG"
 
 [[atlases]]
 name = "Schaefer2018N400n7Tian2020S3"
-path = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_space-MNI152NLin2009cAsym_res-01_dseg.nii.gz"
-lut = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_dseg.tsv"
+path = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_space-MNI152NLin2009cAsym_res-01_dseg.nii.gz"
+lut = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_dseg.tsv"
 space = "MNI152NLin2009cAsym"
 resolution = "01"
 

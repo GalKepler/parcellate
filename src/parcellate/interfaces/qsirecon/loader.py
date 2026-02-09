@@ -13,9 +13,33 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.utils import parse_bids_entities
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_entities(filename: str) -> dict[str, str]:
+    """A simplified BIDS-like entity parser.
+
+    Parameters
+    ----------
+    filename : str
+        The filename to parse.
+
+    Returns
+    -------
+    dict[str, str]
+        A dictionary of BIDS entities.
+    """
+    entities = {}
+    # Remove extensions like .nii.gz or .nii
+    base_filename = filename.removesuffix(".nii.gz").removesuffix(".nii")
+    parts = base_filename.split("_")
+
+    for part in parts:
+        if "-" in part:
+            key, value = part.split("-", 1)
+            entities[key] = value
+    return entities
 
 
 def _process_subject_session(
@@ -88,14 +112,14 @@ def discover_scalar_maps(root: Path, subject: str, session: str | None) -> list[
     root = Path(root)
     scalar_maps: list[ScalarMapDefinition] = []
 
-    for workflow_dir in sorted(root.glob("qsirecon-*")):
+    for workflow_dir in sorted(root.glob("derivatives/qsirecon-*")):
         search_dir = workflow_dir / f"sub-{subject}"
         if session:
             search_dir = search_dir / f"ses-{session}"
         if not search_dir.exists():
             continue
         for nii_path in sorted(search_dir.rglob("*_dwimap.nii*")):
-            entities = parse_bids_entities(nii_path.name)
+            entities = _parse_entities(nii_path.name)
             scalar_maps.append(
                 ScalarMapDefinition(
                     name=_scalar_name(entities, nii_path.name, nii_path),
@@ -128,7 +152,7 @@ def discover_atlases(
 
     atlases: list[AtlasDefinition] = []
     for atlas_path in atlas_files:
-        entities = parse_bids_entities(atlas_path.name)
+        entities = _parse_entities(atlas_path.name)
         name = (
             entities.get("segmentation")
             or entities.get("atlas")
@@ -158,7 +182,7 @@ def discover_atlases(
 def _discover_subjects(root: Path) -> list[str]:
     """Discover subject identifiers from qsirecon workflow directories."""
     subjects: set[str] = set()
-    for workflow_dir in root.glob("qsirecon-*"):
+    for workflow_dir in root.glob("derivatives/qsirecon-*"):
         logger.info(f"Checking workflow directory {workflow_dir}")
         for subj_dir in workflow_dir.glob("sub-*"):
             if subj_dir.is_dir():
@@ -169,7 +193,7 @@ def _discover_subjects(root: Path) -> list[str]:
 def _discover_sessions(root: Path, subject: str) -> list[str | None]:
     """Discover session identifiers for a subject across all workflow dirs."""
     sessions: set[str] = set()
-    for workflow_dir in root.glob("qsirecon-*"):
+    for workflow_dir in root.glob("derivatives/qsirecon-*"):
         subj_dir = workflow_dir / f"sub-{subject}"
         for ses_dir in subj_dir.glob("ses-*"):
             if ses_dir.is_dir():
@@ -186,7 +210,7 @@ def _find_dseg_files(
     """Find dseg NIfTI files, optionally filtering by space."""
     results: list[Path] = []
     for nii_path in sorted(root.rglob("*_dseg.nii*")):
-        entities = parse_bids_entities(nii_path.name)
+        entities = _parse_entities(nii_path.name)
         if subject and entities.get("subject") != subject:
             continue
         if session and entities.get("session") != session:

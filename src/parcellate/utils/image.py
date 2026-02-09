@@ -3,17 +3,18 @@ Utility functions for image handling
 """
 
 from pathlib import Path
+from typing import Union
 
 import nibabel as nib
 
 
-def _load_nifti(img: nib.Nifti1Image | str | Path) -> nib.Nifti1Image:
+def _load_nifti(img: Union[nib.Nifti1Image, str, Path]) -> nib.Nifti1Image:
     """
     Safe load an image
 
     Parameters
     ----------
-    img : nib.Nifti1Image | str | Path
+    img : Union[nib.Nifti1Image, str, Path]
         Image to load.
 
     Returns

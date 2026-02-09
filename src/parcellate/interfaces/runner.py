@@ -6,7 +6,7 @@ This module provides functions for running parcellation workflows.
 import logging
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Protocol
+from typing import Optional, Protocol, Union
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ScalarMapSpaceMismatchError(ValueError):
     """Raised when scalar maps have inconsistent spaces."""
 
-    def __init__(self, spaces: set[str | None]):
+    def __init__(self, spaces: set[Union[str, None]]):
         """Initialize the error."""
         super().__init__(f"Scalar maps have inconsistent spaces: {spaces}")
 
@@ -53,9 +53,9 @@ class ParcellationConfig(Protocol):
     workflow.
     """
 
-    mask: str | None
+    mask: Optional[str]
     background_label: int
-    resampling_target: str | None
+    resampling_target: Optional[str]
     n_jobs: int
 
 
@@ -64,7 +64,7 @@ def _parcellate_scalar_map(
     atlas: AtlasDefinition,
     scalar_map,
     parcellator: VolumetricParcellator,
-) -> ParcellationOutput | None:
+) -> Optional[ParcellationOutput]:
     """Parcellate a single scalar map."""
     logger.debug("Parcellating %s with atlas %s", scalar_map.name, atlas.name)
     try:
@@ -80,7 +80,7 @@ def _parcellate_scalar_map(
             scalar_map.name,
             atlas.name,
         )
-        return po
+        return po  # noqa: TRY300
     except Exception:
         logger.exception(
             "Failed to parcellate %s with atlas %s",
