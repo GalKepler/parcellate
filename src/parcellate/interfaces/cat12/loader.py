@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from parcellate.interfaces.cat12.models import (
+    AtlasConfigurationError,
     AtlasDefinition,
     ReconInput,
     ScalarMapDefinition,
@@ -27,11 +29,36 @@ TISSUE_PATTERNS: dict[TissueType, str] = {
 DEFAULT_SPACE = "MNI152NLin2009cAsym"
 
 
+def _process_cat12_subject_session(
+    root: Path,
+    subject_id: str,
+    session_id: str | None,
+    atlases: Sequence[AtlasDefinition],
+) -> ReconInput | None:
+    """Process a single CAT12 subject/session to discover inputs."""
+    try:
+        context = SubjectContext(subject_id=subject_id, session_id=session_id)
+        scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
+        if not scalar_maps:
+            logger.debug(f"No scalar maps found for sub-{subject_id} ses-{session_id}")
+            return None
+        return ReconInput(
+            context=context,
+            scalar_maps=scalar_maps,
+            atlases=atlases,
+            transforms=(),
+        )
+    except Exception:
+        logger.exception(f"Error processing sub-{subject_id} ses-{session_id}")
+        return None
+
+
 def load_cat12_inputs(
     root: Path,
     atlases: Sequence[AtlasDefinition] | None = None,
     subjects: Iterable[str] | None = None,
     sessions: Iterable[str] | None = None,
+    max_workers: int | None = None,
 ) -> list[ReconInput]:
     """Discover scalar maps for subjects/sessions in a CAT12 derivative.
 
@@ -52,10 +79,8 @@ def load_cat12_inputs(
         List of ReconInput instances for each subject/session.
     """
     root = Path(root)
-    recon_inputs: list[ReconInput] = []
-
     if not atlases:
-        raise ValueError("At least one atlas must be configured for the CAT12 interface.")
+        raise AtlasConfigurationError
 
     # Discover subjects
     subj_list = list(subjects) if subjects else _discover_subjects(root)
@@ -63,31 +88,26 @@ def load_cat12_inputs(
         logger.warning("No subjects found in %s", root)
         return []
 
+    logger.info(f"Discovered {len(subj_list)} subjects. Processing with up to {max_workers or 'unlimited'} workers.")
+
+    tasks = []
     for subject_id in subj_list:
-        # Discover sessions for this subject
         ses_list = list(sessions) if sessions else _discover_sessions(root, subject_id)
         if not ses_list:
             ses_list = [None]
-
         for session_id in ses_list:
-            context = SubjectContext(subject_id=subject_id, session_id=session_id)
-            scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
+            tasks.append((subject_id, session_id))
 
-            if scalar_maps:
-                recon_inputs.append(
-                    ReconInput(
-                        context=context,
-                        scalar_maps=scalar_maps,
-                        atlases=atlases,
-                        transforms=(),
-                    )
-                )
-            else:
-                logger.debug(
-                    "No scalar maps found for subject %s session %s",
-                    subject_id,
-                    session_id,
-                )
+    recon_inputs: list[ReconInput] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_process_cat12_subject_session, root, subject_id, session_id, atlases)
+            for subject_id, session_id in tasks
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                recon_inputs.append(result)
 
     return recon_inputs
 

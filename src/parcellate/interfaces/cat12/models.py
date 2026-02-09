@@ -15,6 +15,10 @@ from parcellate.interfaces.models import (
 )
 
 
+class AtlasConfigurationError(ValueError):
+    """Raised when no atlases are configured for the CAT12 interface."""
+
+
 class TissueType(str, Enum):
     """CAT12 tissue type classification."""
 
@@ -53,6 +57,7 @@ class Cat12Config:
 
 
 __all__ = [
+    "AtlasConfigurationError",
     "AtlasDefinition",
     "Cat12Config",
     "ParcellationOutput",

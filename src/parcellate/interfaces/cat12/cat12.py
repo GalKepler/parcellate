@@ -211,6 +211,7 @@ def run_parcellations(config: Cat12Config) -> list[Path]:
         atlases=config.atlases,
         subjects=config.subjects,
         sessions=config.sessions,
+        max_workers=config.n_jobs,
     )
     if not recon_inputs:
         LOGGER.warning("No CAT12 inputs discovered. Nothing to do.")

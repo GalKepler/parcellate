@@ -133,7 +133,7 @@ def _build_output_path(
     if context.session_id:
         subject_dir = subject_dir / f"ses-{context.session_id}"
 
-    output_dir = subject_dir / "dwi" / f"atlas-{atlas.name}"
+    output_dir = subject_dir / "dwi"
 
     entities: list[str] = [context.label]
     space = atlas.space or scalar_map.space
@@ -181,18 +181,27 @@ def _run_recon(
     for atlas, scalar_maps in plan.items():
         remaining: list[ScalarMapDefinition] = []
         for scalar_map in scalar_maps:
-            out_path = _build_output_path(
-                context=recon.context,
-                atlas=atlas,
-                scalar_map=scalar_map,
-                destination=config.output_dir,
-            )
-            if not config.force and out_path.exists():
-                LOGGER.info("Reusing existing parcellation output at %s", out_path)
-                _ = pd.read_csv(out_path, sep="\t")
-                reused_outputs.append(out_path)
-            else:
-                remaining.append(scalar_map)
+            try:
+                out_path = _build_output_path(
+                    context=recon.context,
+                    atlas=atlas,
+                    scalar_map=scalar_map,
+                    destination=config.output_dir,
+                )
+                if not config.force and out_path.exists():
+                    LOGGER.info("Reusing existing parcellation output at %s", out_path)
+                    _ = pd.read_csv(out_path, sep="\t")
+                    reused_outputs.append(out_path)
+                else:
+                    remaining.append(scalar_map)
+            except ValueError:
+                LOGGER.warning(
+                    "Could not build output path for %s, %s, %s",
+                    recon.context,
+                    atlas,
+                    scalar_map,
+                )
+                continue
         if remaining:
             pending_plan[atlas] = remaining
 
@@ -216,6 +225,7 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
         subjects=config.subjects,
         sessions=config.sessions,
         atlases=config.atlases,
+        max_workers=config.n_jobs,
     )
     if not recon_inputs:
         LOGGER.warning("No recon inputs discovered. Nothing to do.")
