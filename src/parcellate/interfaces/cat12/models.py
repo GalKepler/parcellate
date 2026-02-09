@@ -1,9 +1,10 @@
-"""Structured representations of inputs."""
+"""Structured representations of CAT12 inputs."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from parcellate.interfaces.models import (
@@ -14,22 +15,31 @@ from parcellate.interfaces.models import (
 )
 
 
+class AtlasConfigurationError(ValueError):
+    """Raised when no atlases are configured for the CAT12 interface."""
+
+
+class TissueType(str, Enum):
+    """CAT12 tissue type classification."""
+
+    GM = "GM"  # Gray matter (mwp1*)
+    WM = "WM"  # White matter (mwp2*)
+    CT = "CT"  # Cortical thickness (wct*)
+
+
 @dataclass(frozen=True)
 class ScalarMapDefinition:
     """Description of a scalar map available to the pipeline."""
 
     name: str
     nifti_path: Path
-    param: str | None = None
-    model: str | None = None
-    origin: str | None = None
+    tissue_type: TissueType | None = None
     space: str | None = None
     desc: str | None = None
-    recon_workflow: str | None = None
 
 
 @dataclass
-class QSIReconConfig:
+class Cat12Config:
     """Configuration parsed from TOML input."""
 
     input_root: Path
@@ -37,7 +47,7 @@ class QSIReconConfig:
     atlases: list[AtlasDefinition] | None = None
     subjects: list[str] | None = None
     sessions: list[str] | None = None
-    mask: Path | None = None
+    mask: Path | str | None = "gm"
     background_label: int = 0
     resampling_target: str | None = "data"
     force: bool = False
@@ -47,10 +57,12 @@ class QSIReconConfig:
 
 
 __all__ = [
+    "AtlasConfigurationError",
     "AtlasDefinition",
+    "Cat12Config",
     "ParcellationOutput",
-    "QSIReconConfig",
     "ReconInput",
     "ScalarMapDefinition",
     "SubjectContext",
+    "TissueType",
 ]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from collections.abc import Iterable
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import pandas as pd
@@ -25,70 +25,97 @@ from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
     ParcellationOutput,
     QSIReconConfig,
+    ReconInput,
     ScalarMapDefinition,
     SubjectContext,
 )
 from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
+from parcellate.interfaces.utils import _as_list, _parse_log_level
 
 LOGGER = logging.getLogger(__name__)
 
 
-def _parse_log_level(value: str | int | None) -> int:
-    """Return a logging level from common string/int inputs."""
+def load_config(args: argparse.Namespace) -> QSIReconConfig:
+    """Parse a TOML configuration file and override with CLI arguments."""
 
-    if value is None:
-        return logging.INFO
-    if isinstance(value, int):
-        return value
-    return getattr(logging, str(value).upper(), logging.INFO)
+    data = {}
+    if args.config:
+        with args.config.open("rb") as f:
+            data = tomllib.load(f)
 
+    input_root_str = args.input_root or data.get("input_root", ".")
+    input_root = Path(input_root_str).expanduser().resolve()
+    output_dir_str = args.output_dir or data.get("output_dir", input_root / "parcellations")
+    output_dir = Path(output_dir_str).expanduser().resolve()
+    subjects = args.subjects or _as_list(data.get("subjects"))
+    sessions = args.sessions or _as_list(data.get("sessions"))
 
-def load_config(config_path: Path) -> QSIReconConfig:
-    """Parse a TOML configuration file.
+    atlas_configs = []
+    if args.atlas_config:
+        for atlas_path in args.atlas_config:
+            with atlas_path.open("rb") as f:
+                atlas_configs.append(tomllib.load(f))
+    else:
+        atlas_configs = data.get("atlases", [])
+    atlases = _parse_atlases(atlas_configs)
 
-    The configuration expects the following optional keys:
-    - ``input_root``: Root directory of QSIRecon derivatives.
-    - ``output_dir``: Destination directory for parcellation outputs.
-    - ``subjects``: List of subject identifiers to process.
-    - ``sessions``: List of session identifiers to process.
-    - ``mask``: Optional path to a brain mask to apply during parcellation.
-    - ``force``: Whether to overwrite existing parcellation outputs.
-    - ``log_level``: Logging verbosity (e.g., ``INFO``, ``DEBUG``).
-    """
-
-    with config_path.open("rb") as f:
-        data = tomllib.load(f)
-
-    input_root = Path(data.get("input_root", ".")).expanduser().resolve()
-    output_dir = Path(data.get("output_dir", input_root / "parcellations")).expanduser().resolve()
-    subjects = _as_list(data.get("subjects"))
-    sessions = _as_list(data.get("sessions"))
-
-    mask_value = data.get("mask")
+    mask_value = args.mask or data.get("mask")
     mask = Path(mask_value).expanduser().resolve() if mask_value else None
-    force = bool(data.get("force", False))
-    log_level = _parse_log_level(data.get("log_level"))
+    force = args.force or bool(data.get("force", False))
+    log_level = _parse_log_level(args.log_level or data.get("log_level"))
+    n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
+    n_procs = args.n_procs or int(data.get("n_procs", 1))
 
     return QSIReconConfig(
         input_root=input_root,
         output_dir=output_dir,
+        atlases=atlases,
         subjects=subjects,
         sessions=sessions,
         mask=mask,
         force=force,
         log_level=log_level,
+        n_jobs=n_jobs,
+        n_procs=n_procs,
     )
 
 
-def _as_list(value: Iterable[str] | str | None) -> list[str] | None:
-    """Normalize configuration values into a list of strings."""
+def _parse_atlases(atlas_configs: list[dict]) -> list[AtlasDefinition]:
+    """Parse atlas definitions from configuration.
 
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return [value]
-    return list(value)
+    Parameters
+    ----------
+    atlas_configs
+        List of atlas configuration dictionaries.
+
+    Returns
+    -------
+    list[AtlasDefinition]
+        List of parsed atlas definitions.
+    """
+    atlases = []
+    for cfg in atlas_configs:
+        name = cfg.get("name")
+        path = cfg.get("path")
+        if not name or not path:
+            LOGGER.warning("Skipping atlas with missing name or path: %s", cfg)
+            continue
+        lut = cfg.get("lut")
+        lut_path = Path(lut).expanduser().resolve() if lut else None
+        space = cfg.get("space")
+        resolution = cfg.get("resolution")
+
+        atlases.append(
+            AtlasDefinition(
+                name=name,
+                nifti_path=Path(path).expanduser().resolve(),
+                lut=lut_path,
+                space=space,
+                resolution=resolution,
+            )
+        )
+    return atlases
 
 
 def _build_output_path(
@@ -106,7 +133,7 @@ def _build_output_path(
     if context.session_id:
         subject_dir = subject_dir / f"ses-{context.session_id}"
 
-    output_dir = subject_dir / "dwi" / f"atlas-{atlas.name}"
+    output_dir = subject_dir / "dwi"
 
     entities: list[str] = [context.label]
     space = atlas.space or scalar_map.space
@@ -141,30 +168,20 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
     return out_path
 
 
-def run_parcellations(config: QSIReconConfig) -> list[Path]:
-    """Execute the full parcellation workflow from a parsed config."""
-
-    logging.basicConfig(level=config.log_level, format="%(asctime)s [%(levelname)s] %(message)s")
-    LOGGER.info("Loading QSIRecon inputs from %s", config.input_root)
-
-    recon_inputs = load_qsirecon_inputs(
-        root=config.input_root,
-        subjects=config.subjects,
-        sessions=config.sessions,
-    )
-    if not recon_inputs:
-        LOGGER.warning("No recon inputs discovered. Nothing to do.")
-        return []
-
+def _run_recon(
+    recon: ReconInput,
+    plan: dict[AtlasDefinition, list[ScalarMapDefinition]],
+    config: QSIReconConfig,
+) -> list[Path]:
+    """Run the parcellation workflow for a single recon."""
+    pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
+    reused_outputs: list[Path] = []
     outputs: list[Path] = []
-    for recon in recon_inputs:
-        plan = plan_qsirecon_parcellation_workflow(recon)
-        pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
-        reused_outputs: list[Path] = []
 
-        for atlas, scalar_maps in plan.items():
-            remaining: list[ScalarMapDefinition] = []
-            for scalar_map in scalar_maps:
+    for atlas, scalar_maps in plan.items():
+        remaining: list[ScalarMapDefinition] = []
+        for scalar_map in scalar_maps:
+            try:
                 out_path = _build_output_path(
                     context=recon.context,
                     atlas=atlas,
@@ -177,36 +194,131 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
                     reused_outputs.append(out_path)
                 else:
                     remaining.append(scalar_map)
-            if remaining:
-                pending_plan[atlas] = remaining
+            except ValueError:
+                LOGGER.warning(
+                    "Could not build output path for %s, %s, %s",
+                    recon.context,
+                    atlas,
+                    scalar_map,
+                )
+                continue
+        if remaining:
+            pending_plan[atlas] = remaining
 
-        if pending_plan:
-            jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
-            for result in jobs:
-                outputs.append(_write_output(result, destination=config.output_dir))
+    if pending_plan:
+        jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
+        for result in jobs:
+            outputs.append(_write_output(result, destination=config.output_dir))
 
-        outputs.extend(reused_outputs)
-    LOGGER.info("Finished writing %d parcellation files", len(outputs))
+    outputs.extend(reused_outputs)
     return outputs
 
 
-def build_arg_parser() -> argparse.ArgumentParser:
-    """Create the CLI argument parser."""
+def run_parcellations(config: QSIReconConfig) -> list[Path]:
+    """Execute the full parcellation workflow from a parsed config."""
 
-    parser = argparse.ArgumentParser(description="Run parcellations for QSIRecon derivatives.")
-    parser.add_argument(
-        "config",
-        type=Path,
-        help="Path to a TOML configuration file describing inputs and outputs.",
+    logging.basicConfig(level=config.log_level, format="%(asctime)s [%(levelname)s] %(message)s")
+    LOGGER.info("Loading QSIRecon inputs from %s", config.input_root)
+
+    recon_inputs = load_qsirecon_inputs(
+        root=config.input_root,
+        subjects=config.subjects,
+        sessions=config.sessions,
+        atlases=config.atlases,
+        max_workers=config.n_jobs,
     )
-    return parser
+    if not recon_inputs:
+        LOGGER.warning("No recon inputs discovered. Nothing to do.")
+        return []
+
+    if config.n_procs > 1:
+        with ProcessPoolExecutor(max_workers=config.n_procs) as executor:
+            futures = [
+                executor.submit(
+                    _run_recon,
+                    recon,
+                    plan_qsirecon_parcellation_workflow(recon),
+                    config,
+                )
+                for recon in recon_inputs
+            ]
+            outputs = [future.result() for future in futures]
+    else:
+        outputs = [_run_recon(recon, plan_qsirecon_parcellation_workflow(recon), config) for recon in recon_inputs]
+
+    flat_outputs = [item for sublist in outputs for item in sublist]
+    LOGGER.info("Finished writing %d parcellation files", len(flat_outputs))
+    return flat_outputs
+
+
+def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Add CLI arguments to the parser."""
+
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        help="Root directory of QSIRecon derivatives.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Destination directory for parcellation outputs.",
+    )
+    parser.add_argument(
+        "--atlas-config",
+        type=Path,
+        nargs="+",
+        help="Path to one or more TOML files defining atlases.",
+    )
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        help="List of subject identifiers to process.",
+    )
+    parser.add_argument(
+        "--sessions",
+        nargs="+",
+        help="List of session identifiers to process.",
+    )
+    parser.add_argument(
+        "--mask",
+        type=Path,
+        help="Optional path to a brain mask to apply during parcellation.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Whether to overwrite existing parcellation outputs.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging verbosity (e.g., INFO, DEBUG).",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        help="Number of parallel jobs for within-subject parcellation.",
+    )
+    parser.add_argument(
+        "--n-procs",
+        type=int,
+        help="Number of parallel processes for across-subject parcellation.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to a TOML configuration file.",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for CLI execution."""
 
-    args = build_arg_parser().parse_args(argv)
-    config = load_config(args.config)
+    parser = argparse.ArgumentParser(description="Run parcellations for QSIRecon derivatives.")
+    add_cli_args(parser)
+    args = parser.parse_args(argv)
+    config = load_config(args)
 
     try:
         run_parcellations(config)

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-
-from bids import BIDSLayout
 
 from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
@@ -13,156 +13,228 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
+from parcellate.interfaces.utils import parse_bids_entities
+
+logger = logging.getLogger(__name__)
+
+
+def _process_subject_session(
+    root: Path,
+    subject_id: str,
+    session_id: str | None,
+    atlas_definitions: list[AtlasDefinition],
+) -> ReconInput | None:
+    """Process a single subject/session to discover inputs."""
+    try:
+        context = SubjectContext(subject_id=subject_id, session_id=session_id)
+        scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
+        if not scalar_maps:
+            logger.debug(f"No scalar maps found for sub-{subject_id} ses-{session_id}")
+            return None
+        return ReconInput(
+            context=context,
+            scalar_maps=scalar_maps,
+            atlases=atlas_definitions,
+            transforms=(),
+        )
+    except Exception:
+        logger.exception(f"Error processing sub-{subject_id} ses-{session_id}")
+        return None
 
 
 def load_qsirecon_inputs(
     root: Path,
     subjects: Iterable[str] | None = None,
     sessions: Iterable[str] | None = None,
+    atlases: Iterable[AtlasDefinition] | None = None,
+    max_workers: int | None = None,
 ) -> list[ReconInput]:
     """Discover scalar maps and atlases for subjects/sessions in a QSIRecon derivative."""
-
-    layout = BIDSLayout(
-        root,
-        validate=False,
-        derivatives=True,
-        config=["bids", "derivatives"],
+    root = Path(root)
+    subj_list = list(subjects) if subjects else _discover_subjects(root)
+    atlas_definitions = list(atlases) if atlases else discover_atlases(root=root)
+    logger.info(
+        f"Discovered {len(subj_list)} subjects and {len(atlas_definitions)} atlases in QSIRecon derivatives. "
+        f"Processing with up to {max_workers or 'unlimited'} workers."
     )
-    entities = layout.get_entities()
-    subj_list = list(subjects) if subjects else layout.get_subjects()
-    recon_inputs: list[ReconInput] = []
-    atlases = discover_atlases(layout=layout)
+
+    tasks = []
     for subject_id in subj_list:
-        if sessions:
-            ses_list = list(sessions)
-        elif "session" in entities:
-            ses_list = layout.get_sessions(subject=subject_id) or [None]
-        else:
-            ses_list = [None]
+        ses_list = list(sessions) if sessions else _discover_sessions(root, subject_id)
         for session_id in ses_list:
-            context = SubjectContext(subject_id=subject_id, session_id=session_id)
-            scalar_maps = discover_scalar_maps(layout=layout, subject=subject_id, session=session_id)
-            recon_inputs.append(
-                ReconInput(
-                    context=context,
-                    scalar_maps=scalar_maps,
-                    atlases=atlases,
-                    transforms=(),
-                )
+            tasks.append((subject_id, session_id))
+
+    recon_inputs: list[ReconInput] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _process_subject_session,
+                root,
+                subject_id,
+                session_id,
+                atlas_definitions,
             )
+            for subject_id, session_id in tasks
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                recon_inputs.append(result)
     return recon_inputs
 
 
-def discover_scalar_maps(layout: BIDSLayout, subject: str, session: str | None) -> list[ScalarMapDefinition]:
+def discover_scalar_maps(root: Path, subject: str, session: str | None) -> list[ScalarMapDefinition]:
     """Return scalar map definitions."""
-
-    filters = {
-        "subject": subject,
-        "suffix": "dwimap",
-        "extension": ["nii", "nii.gz"],
-    }
-    if session and "session" in layout.get_entities():
-        filters["session"] = session
-
-    files = layout.get(
-        return_type="object",
-        **filters,
-    )
-
+    root = Path(root)
     scalar_maps: list[ScalarMapDefinition] = []
 
-    for fobj in files:
-        scalar_maps.append(
-            ScalarMapDefinition(
-                name=_scalar_name(fobj),
-                nifti_path=Path(fobj.path),
-                param=_parameter_name(fobj),
-                desc=fobj.entities.get("desc"),
-                model=fobj.entities.get("model"),
-                origin=fobj.entities.get("Description"),
-                space=fobj.entities.get("space"),
-                recon_workflow=_workflow_name(layout, fobj),
+    for workflow_dir in sorted(root.glob("qsirecon-*")):
+        search_dir = workflow_dir / f"sub-{subject}"
+        if session:
+            search_dir = search_dir / f"ses-{session}"
+        if not search_dir.exists():
+            continue
+        for nii_path in sorted(search_dir.rglob("*_dwimap.nii*")):
+            entities = parse_bids_entities(nii_path.name)
+            scalar_maps.append(
+                ScalarMapDefinition(
+                    name=_scalar_name(entities, nii_path.name, nii_path),
+                    nifti_path=nii_path,
+                    param=_parameter_name(entities, nii_path.name),
+                    desc=entities.get("desc"),
+                    model=entities.get("model"),
+                    origin=entities.get("Description"),
+                    space=entities.get("space"),
+                    recon_workflow=_workflow_name(root, nii_path),
+                )
             )
-        )
 
     return scalar_maps
 
 
 def discover_atlases(
-    layout: BIDSLayout,
+    root: Path,
     space: str = "MNI152NLin2009cAsym",
     allow_fallback: bool = True,
     subject: str | None = None,
     session: str | None = None,
-    **kwargs,
+    **kwargs: str,
 ) -> list[AtlasDefinition]:
     """Return atlas definitions."""
-
-    filters = {
-        "space": space,
-        "suffix": ["dseg"],
-        "extension": ["nii", "nii.gz"],
-        "subject": subject,
-        "session": session,
-        **kwargs,
-    }
-
-    filters = {k: v for k, v in filters.items() if v is not None}
-
-    atlas_files = layout.get(return_type="object", **filters)
+    root = Path(root)
+    atlas_files = _find_dseg_files(root, space=space, subject=subject, session=session)
     if not atlas_files and allow_fallback:
-        # Fallback: drop space constraint if not found
-        fallback = {k: v for k, v in filters.items() if k != "space"}
-        atlas_files = layout.get(return_type="object", **fallback)
+        atlas_files = _find_dseg_files(root, space=None, subject=subject, session=session)
 
     atlases: list[AtlasDefinition] = []
-    for fobj in atlas_files:
+    for atlas_path in atlas_files:
+        entities = parse_bids_entities(atlas_path.name)
         name = (
-            fobj.get_entities().get("segmentation")
-            or fobj.get_entities().get("atlas")
-            or fobj.get_entities().get("desc")
-            or Path(fobj.path).stem
+            entities.get("segmentation")
+            or entities.get("atlas")
+            or entities.get("desc")
+            or atlas_path.name.split(".nii")[0]
         )
-        resolution = fobj.get_entities().get("res") or None
-        space = fobj.get_entities().get("space") or filters.get("space")
-        lut_entities = {"atlas": name, "extension": ["tsv", "csv"]}
-        lut_files = layout.get(return_type="object", **lut_entities)
-
-        lut_path = Path(lut_files[0].path) if lut_files else None
+        resolution = entities.get("resolution")
+        atlas_space = entities.get("space") or space
+        lut_path = _find_lut_file(atlas_path, name, root)
         atlases.append(
             AtlasDefinition(
                 name=name,
-                nifti_path=Path(fobj.path),
+                nifti_path=atlas_path,
                 lut=lut_path,
                 resolution=resolution,
-                space=space,
+                space=atlas_space,
             )
         )
     return atlases
 
 
-def _parameter_name(fobj) -> str:
-    entities = fobj.get_entities()
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _discover_subjects(root: Path) -> list[str]:
+    """Discover subject identifiers from qsirecon workflow directories."""
+    subjects: set[str] = set()
+    for workflow_dir in root.glob("qsirecon-*"):
+        logger.info(f"Checking workflow directory {workflow_dir}")
+        for subj_dir in workflow_dir.glob("sub-*"):
+            if subj_dir.is_dir():
+                subjects.add(subj_dir.name.replace("sub-", "", 1))
+    return sorted(subjects)
+
+
+def _discover_sessions(root: Path, subject: str) -> list[str | None]:
+    """Discover session identifiers for a subject across all workflow dirs."""
+    sessions: set[str] = set()
+    for workflow_dir in root.glob("qsirecon-*"):
+        subj_dir = workflow_dir / f"sub-{subject}"
+        for ses_dir in subj_dir.glob("ses-*"):
+            if ses_dir.is_dir():
+                sessions.add(ses_dir.name.replace("ses-", "", 1))
+    return sorted(sessions) if sessions else [None]
+
+
+def _find_dseg_files(
+    root: Path,
+    space: str | None = None,
+    subject: str | None = None,
+    session: str | None = None,
+) -> list[Path]:
+    """Find dseg NIfTI files, optionally filtering by space."""
+    results: list[Path] = []
+    for nii_path in sorted(root.rglob("*_dseg.nii*")):
+        entities = parse_bids_entities(nii_path.name)
+        if subject and entities.get("subject") != subject:
+            continue
+        if session and entities.get("session") != session:
+            continue
+        if space and entities.get("space", "").lower() != space.lower():
+            continue
+        results.append(nii_path)
+    return results
+
+
+def _find_lut_file(atlas_path: Path, atlas_name: str, root: Path) -> Path | None:
+    """Search for a .tsv/.csv look-up table matching *atlas_name*.
+
+    Searches the atlas file's directory first, then the broader tree.
+    """
+    for search_root in (atlas_path.parent, root):
+        for ext in ("tsv", "csv"):
+            for candidate in search_root.rglob(f"*{atlas_name}*.{ext}"):
+                return candidate
+    return None
+
+
+def _parameter_name(entities: dict[str, str], filename: str) -> str:
+    """Extract parameter name from parsed entities or filename."""
     param = entities.get("param")
     if not param:
-        fname = fobj.filename
-        param_value = fname.split("param-")[-1].split("_")[0]
-        param = param_value
+        param = filename.split("param-")[-1].split("_")[0] if "param-" in filename else ""
     return param
 
 
-def _scalar_name(fobj) -> str:
-    entities = fobj.get_entities()
-    name_parts = [entities.get("model"), _parameter_name(fobj), entities.get("desc")]
+def _scalar_name(entities: dict[str, str], filename: str, filepath: Path) -> str:
+    """Construct a scalar map name from parsed entities."""
+    name_parts = [
+        entities.get("model"),
+        _parameter_name(entities, filename),
+        entities.get("desc"),
+    ]
     name = "-".join(part for part in name_parts if part)
-    return name or Path(fobj.path).stem
+    return name or filepath.name.split(".nii")[0]
 
 
-def _workflow_name(layout, fobj) -> str:
-    entities = fobj.get_entities()
-    workflow = entities.get("recon_workflow")
-    if not workflow:
-        fname = Path(fobj.path).relative_to(layout.root).parts[1]
-        workflow_value = fname.split("qsirecon-")[-1]
-        workflow = workflow_value
-    return workflow
+def _workflow_name(root: Path, filepath: Path) -> str:
+    """Extract workflow name from a file path by finding the qsirecon-* component."""
+    try:
+        rel = filepath.relative_to(root)
+    except ValueError:
+        return filepath.parent.name
+    for part in rel.parts:
+        if part.startswith("qsirecon-"):
+            return part.split("qsirecon-", 1)[1]
+    return filepath.parent.name

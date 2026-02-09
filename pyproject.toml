@@ -23,9 +23,17 @@ dependencies = [
     "numpy>=2.0.2",
     "pandas>=2.3.3",
     "pybids>=0.20.0",
+    "python-dotenv>=1.2.1",
     "seaborn>=0.13.2",
     "tomli>=2.3.0",
 ]
+
+[project.optional-dependencies]
+dotenv = ["python-dotenv>=1.0.0"]
+
+[project.scripts]
+parcellate = "parcellate.cli:main"
+parcellate-cat12 = "parcellate.interfaces.cat12.cli:main"
 
 [project.urls]
 Homepage = "https://GalKepler.github.io/parcellate/"

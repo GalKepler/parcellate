@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
-from logging import warning
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -18,6 +18,8 @@ from nilearn.image import resample_to_img
 from parcellate.metrics.base import Statistic
 from parcellate.metrics.volume import BUILTIN_STATISTICS
 from parcellate.utils import _load_nifti
+
+logger = logging.getLogger(__name__)
 
 
 class MissingLUTColumnsError(ValueError):
@@ -65,7 +67,7 @@ class VolumetricParcellator:
         *,
         mask: nib.Nifti1Image | str | Path | None = None,
         background_label: int = 0,
-        resampling_target: Literal["data", "labels", None] = "data",
+        resampling_target: Literal["data", "labels", "atlas", None] = "data",
         stat_functions: Mapping[str, Callable[..., float]] | None = None,
     ) -> None:
         """
@@ -79,7 +81,7 @@ class VolumetricParcellator:
             Region labels mapping or sequence, by default None
         lut : pd.DataFrame | str | Path | None, optional
             Lookup table for region labels, by default None. Must include columns
-            "index" and "name" following the BIDS standard.
+            "index" and "label" following the BIDS standard.
         mask : nib.Nifti1Image | str | Path | None, optional
             Optional mask to apply to the atlas, by default None
         background_label : int, optional
@@ -91,13 +93,13 @@ class VolumetricParcellator:
         """
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
-        if mask is not None:
-            self.mask = self._load_mask(mask)
+        self.mask = self._load_mask(mask) if mask is not None else None
         self.background_label = int(background_label)
         self.resampling_target = resampling_target
         self._atlas_data = self._load_atlas_data()
         self._regions = self._build_regions(labels)
         self._stat_functions = self._prepare_stat_functions(stat_functions)
+        self._fitted_scalar_id: str | int | None = None
 
     def _load_mask(self, mask: nib.Nifti1Image | str | Path) -> nib.Nifti1Image:
         """
@@ -270,6 +272,10 @@ class VolumetricParcellator:
                 prepared = list(stat_functions)
             else:
                 raise MissingStatisticalFunctionError(message="Statistic sequence must contain Statistic instances.")
+        else:
+            raise MissingStatisticalFunctionError(
+                message=f"stat_functions must be a Mapping or Sequence, got {type(stat_functions).__name__}"
+            )
 
         if not prepared or len(prepared) == 0:
             raise MissingStatisticalFunctionError()
@@ -293,10 +299,14 @@ class VolumetricParcellator:
             interpolation = "nearest"
         self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation="nearest")
         self._prepared_scalar_img = self._prepare_map(self.scalar_img, ref_img, interpolation=interpolation)
-        if hasattr(self, "mask"):
+        if self.mask is not None:
             self._prepared_mask = self._prepare_map(self.mask, ref_img, interpolation="nearest")
             self._prepared_atlas_img = self._apply_mask_to_atlas()
         self.ref_img = ref_img
+        if isinstance(scalar_img, (str, Path)):
+            self._fitted_scalar_id = str(scalar_img)
+        else:
+            self._fitted_scalar_id = id(scalar_img)
 
     def transform(self, scalar_img: str | Path | nib.Nifti1Image) -> pd.DataFrame:
         """
@@ -309,11 +319,21 @@ class VolumetricParcellator:
         """
         if not hasattr(self, "_prepared_atlas_img") or not hasattr(self, "_prepared_scalar_img"):
             raise ParcellatorNotFittedError()
-        prepared_scalar_img = self._prepare_map(
-            _load_nifti(scalar_img),
-            self.ref_img,
-            interpolation="continuous",
-        )
+
+        current_scalar_id: str | int
+        if isinstance(scalar_img, (str, Path)):
+            current_scalar_id = str(scalar_img)
+        else:
+            current_scalar_id = id(scalar_img)
+
+        if self._fitted_scalar_id == current_scalar_id:
+            prepared_scalar_img = self._prepared_scalar_img
+        else:
+            prepared_scalar_img = self._prepare_map(
+                _load_nifti(scalar_img),
+                self.ref_img,
+                interpolation="continuous",
+            )
 
         scalar_data = np.asarray(prepared_scalar_img.get_fdata())
         atlas_data = np.asarray(self._prepared_atlas_img.get_fdata()).astype(int)
@@ -322,12 +342,17 @@ class VolumetricParcellator:
         else:
             result = pd.DataFrame({"index": self._regions, "label": [str(r) for r in self._regions]})
 
+        valid_region_ids = set(result["index"])
+        stats_data = {}
+
         for region_id in self._regions:
-            if region_id not in result["index"].values:
-                warning(f"Region ID {region_id} not found in LUT; skipping.")
+            if region_id not in valid_region_ids:
+                logger.warning("Region ID %d not found in LUT; skipping.", region_id)
                 continue
             parcel_mask = atlas_data == region_id
             parcel_values = scalar_data[parcel_mask]
+
+            region_stats = {}
             for stat in self._stat_functions:
                 stat_name = stat.name
                 stat_func = stat.function
@@ -335,5 +360,11 @@ class VolumetricParcellator:
                     stat_value = stat_func(parcel_values, prepared_scalar_img)
                 else:
                     stat_value = stat_func(parcel_values)
-                result.loc[result["index"] == region_id, stat_name] = stat_value
+                region_stats[stat_name] = stat_value
+            stats_data[region_id] = region_stats
+
+        stats_df = pd.DataFrame.from_dict(stats_data, orient="index")
+        stats_df.index.name = "index"
+        result = result.merge(stats_df, on="index", how="left")
+
         return result
