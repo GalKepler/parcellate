@@ -232,6 +232,7 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
         return []
 
     if config.n_procs > 1:
+        LOGGER.info("Running parcellation across subjects with %d processes", config.n_procs)
         with ProcessPoolExecutor(max_workers=config.n_procs) as executor:
             futures = [
                 executor.submit(
@@ -242,6 +243,7 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
                 )
                 for recon in recon_inputs
             ]
+            LOGGER.info("Submitted %d parcellation jobs to the executor", len(futures))
             outputs = [future.result() for future in futures]
     else:
         outputs = [_run_recon(recon, plan_qsirecon_parcellation_workflow(recon), config) for recon in recon_inputs]

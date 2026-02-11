@@ -81,7 +81,7 @@ def _parcellate_scalar_map(
             atlas.name,
         )
         return po  # noqa: TRY300
-    except Exception:
+    except Exception:  # Broad catch intentional: defensive processing in batch pipelines
         logger.exception(
             "Failed to parcellate %s with atlas %s",
             scalar_map.name,

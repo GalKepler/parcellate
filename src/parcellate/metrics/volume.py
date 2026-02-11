@@ -4,6 +4,7 @@ A battery of volumetric parcellation statistics.
 
 import nibabel as nib
 import numpy as np
+import scipy.stats as stats
 
 from parcellate.metrics.base import Statistic
 
@@ -33,10 +34,12 @@ def volume(parcel_values: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
 
 
 def voxel_count(parcel_values: np.ndarray) -> int:
-    """Compute the voxel count of a parcel.
+    """Compute the count of non-zero voxels in a parcel.
 
-    This function counts the number of voxels in a parcel that have a
-    non-zero and non-NaN value.
+    This function counts the number of voxels in a parcel that have
+    non-zero and non-NaN values. This is useful for modulated tissue
+    maps (e.g., CAT12's mwp* files) where zero values indicate no
+    tissue present.
 
     Parameters
     ----------
@@ -46,7 +49,7 @@ def voxel_count(parcel_values: np.ndarray) -> int:
     Returns
     -------
     int
-        The number of voxels in the parcel.
+        The number of non-zero, non-NaN voxels in the parcel.
     """
     num_voxels = np.sum(parcel_values.astype(bool))
     return int(num_voxels)
@@ -280,6 +283,38 @@ def volsum(values: np.ndarray) -> float:
     return float(np.nansum(values))
 
 
+def skewness(values: np.ndarray) -> float:
+    """Compute the skewness of values.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        The array of values to compute the skewness from.
+
+    Returns
+    -------
+    float
+        The skewness of the values.
+    """
+    return float(stats.skew(values, nan_policy="omit"))
+
+
+def kurtosis(values: np.ndarray) -> float:
+    """Compute the kurtosis of values.
+
+    Parameters
+    ----------
+    values : np.ndarray
+        The array of values to compute the kurtosis from.
+
+    Returns
+    -------
+    float
+        The kurtosis of the values.
+    """
+    return float(stats.kurtosis(values, nan_policy="omit"))
+
+
 # define builtin statistics
 BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="volume_mm3", function=volume, requires_image=True),
@@ -295,4 +330,6 @@ BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="std", function=np.nanstd),
     Statistic(name="median", function=np.nanmedian),
     Statistic(name="sum", function=volsum),
+    Statistic(name="skewness", function=skewness),
+    Statistic(name="kurtosis", function=kurtosis),
 ]
