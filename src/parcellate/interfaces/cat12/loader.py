@@ -40,7 +40,7 @@ def _process_cat12_subject_session(
         context = SubjectContext(subject_id=subject_id, session_id=session_id)
         scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
         if not scalar_maps:
-            logger.debug(f"No scalar maps found for sub-{subject_id} ses-{session_id}")
+            logger.debug("No scalar maps found for sub-%s ses-%s", subject_id, session_id)
             return None
         return ReconInput(
             context=context,
@@ -48,8 +48,8 @@ def _process_cat12_subject_session(
             atlases=atlases,
             transforms=(),
         )
-    except Exception:
-        logger.exception(f"Error processing sub-{subject_id} ses-{session_id}")
+    except Exception:  # Broad catch intentional: defensive processing in batch pipelines
+        logger.exception("Error processing sub-%s ses-%s", subject_id, session_id)
         return None
 
 
@@ -88,7 +88,7 @@ def load_cat12_inputs(
         logger.warning("No subjects found in %s", root)
         return []
 
-    logger.info(f"Discovered {len(subj_list)} subjects. Processing with up to {max_workers or 'unlimited'} workers.")
+    logger.info("Discovered %d subjects. Processing with up to %s workers.", len(subj_list), max_workers or "unlimited")
 
     tasks = []
     for subject_id in subj_list:

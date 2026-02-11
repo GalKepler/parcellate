@@ -42,28 +42,45 @@ def _parse_entities(filename: str) -> dict[str, str]:
     return entities
 
 
-def _process_subject_session(
+def _process_subject(
     root: Path,
     subject_id: str,
-    session_id: str | None,
     atlas_definitions: list[AtlasDefinition],
-) -> ReconInput | None:
-    """Process a single subject/session to discover inputs."""
-    try:
-        context = SubjectContext(subject_id=subject_id, session_id=session_id)
-        scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
-        if not scalar_maps:
-            logger.debug(f"No scalar maps found for sub-{subject_id} ses-{session_id}")
-            return None
-        return ReconInput(
-            context=context,
-            scalar_maps=scalar_maps,
-            atlases=atlas_definitions,
-            transforms=(),
-        )
-    except Exception:
-        logger.exception(f"Error processing sub-{subject_id} ses-{session_id}")
-        return None
+) -> list[ReconInput]:
+    """Process a single subject to discover inputs for all sessions.
+
+    Returns
+    -------
+    list[ReconInput]
+        List of ReconInput instances, one per session with valid scalar maps.
+    """
+    sessions = _discover_sessions(root, subject_id)
+    results = []
+    for session_id in sessions:
+        try:
+            context = SubjectContext(subject_id=subject_id, session_id=session_id)
+            scalar_maps = discover_scalar_maps(root=root, subject=subject_id, session=session_id)
+            if not scalar_maps:
+                logger.debug("No scalar maps found for sub-%s ses-%s", subject_id, session_id)
+                continue  # Try next session
+            logger.debug(
+                "Discovered %d scalar maps for sub-%s ses-%s",
+                len(scalar_maps),
+                subject_id,
+                session_id,
+            )
+            results.append(
+                ReconInput(
+                    context=context,
+                    scalar_maps=scalar_maps,
+                    atlases=atlas_definitions,
+                    transforms=(),
+                )
+            )
+        except Exception:  # Broad catch intentional: defensive processing in batch pipelines
+            logger.exception("Error processing sub-%s ses-%s", subject_id, session_id)
+            continue  # Try next session
+    return results
 
 
 def load_qsirecon_inputs(
@@ -78,32 +95,26 @@ def load_qsirecon_inputs(
     subj_list = list(subjects) if subjects else _discover_subjects(root)
     atlas_definitions = list(atlases) if atlases else discover_atlases(root=root)
     logger.info(
-        f"Discovered {len(subj_list)} subjects and {len(atlas_definitions)} atlases in QSIRecon derivatives. "
-        f"Processing with up to {max_workers or 'unlimited'} workers."
+        "Discovered %d subjects and %d atlases in QSIRecon derivatives. Processing with up to %s workers.",
+        len(subj_list),
+        len(atlas_definitions),
+        max_workers or "unlimited",
     )
-
-    tasks = []
-    for subject_id in subj_list:
-        ses_list = list(sessions) if sessions else _discover_sessions(root, subject_id)
-        for session_id in ses_list:
-            tasks.append((subject_id, session_id))
 
     recon_inputs: list[ReconInput] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
-                _process_subject_session,
+                _process_subject,
                 root,
                 subject_id,
-                session_id,
                 atlas_definitions,
             )
-            for subject_id, session_id in tasks
+            for subject_id in subj_list
         }
         for future in as_completed(futures):
-            result = future.result()
-            if result:
-                recon_inputs.append(result)
+            results = future.result()  # Returns list[ReconInput]
+            recon_inputs.extend(results)  # Flatten into main list
     return recon_inputs
 
 
@@ -183,7 +194,7 @@ def _discover_subjects(root: Path) -> list[str]:
     """Discover subject identifiers from qsirecon workflow directories."""
     subjects: set[str] = set()
     for workflow_dir in root.glob("derivatives/qsirecon-*"):
-        logger.info(f"Checking workflow directory {workflow_dir}")
+        logger.info("Checking workflow directory %s", workflow_dir)
         for subj_dir in workflow_dir.glob("sub-*"):
             if subj_dir.is_dir():
                 subjects.add(subj_dir.name.replace("sub-", "", 1))
