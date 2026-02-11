@@ -26,7 +26,7 @@ class ParcellationConfig:
 
     input_root: Path
     output_dir: Path
-    atlases: list["AtlasDefinition"] | None = None
+    atlases: list[AtlasDefinition] | None = None
     subjects: list[str] | None = None
     sessions: list[str] | None = None
     mask: Path | str | None = None

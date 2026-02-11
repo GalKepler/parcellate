@@ -20,6 +20,7 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
     import tomli as tomllib  # type: ignore[import]
 
+from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.qsirecon.loader import load_qsirecon_inputs
 from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
@@ -29,7 +30,6 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import _as_list, _parse_log_level
 

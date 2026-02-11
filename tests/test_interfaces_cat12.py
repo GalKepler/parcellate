@@ -49,11 +49,15 @@ from parcellate.interfaces.cat12.models import (
 )
 from parcellate.interfaces.planner import (
     _space_match,
+)
+from parcellate.interfaces.planner import (
     plan_parcellation_workflow as plan_cat12_parcellation_workflow,
 )
 from parcellate.interfaces.runner import (
     ScalarMapSpaceMismatchError,
     _validate_scalar_map_spaces,
+)
+from parcellate.interfaces.runner import (
     run_parcellation_workflow as run_cat12_parcellation_workflow,
 )
 

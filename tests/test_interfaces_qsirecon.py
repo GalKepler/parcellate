@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from parcellate.interfaces.planner import _space_match
+from parcellate.interfaces.planner import plan_parcellation_workflow as plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.loader import (
     discover_atlases,
     discover_scalar_maps,
@@ -21,7 +22,6 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.planner import plan_parcellation_workflow as plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.qsirecon import (
     _as_list,
     _build_output_path,
