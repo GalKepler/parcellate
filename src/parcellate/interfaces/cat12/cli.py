@@ -30,8 +30,8 @@ from parcellate.interfaces.cat12.models import (
     ReconInput,
     SubjectContext,
 )
-from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
-from parcellate.interfaces.cat12.runner import run_cat12_parcellation_workflow
+from parcellate.interfaces.planner import plan_parcellation_workflow
+from parcellate.interfaces.runner import run_parcellation_workflow
 
 LOGGER = logging.getLogger(__name__)
 
@@ -306,7 +306,7 @@ def process_single_subject(
     )
 
     # Check for existing outputs and filter
-    plan = plan_cat12_parcellation_workflow(recon)
+    plan = plan_parcellation_workflow(recon)
     pending_plan = {}
     reused_outputs: list[Path] = []
 
@@ -324,7 +324,7 @@ def process_single_subject(
 
     outputs: list[Path] = []
     if pending_plan:
-        results = run_cat12_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
+        results = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in results:
             out_path = _write_output(result, config.output_dir)
             outputs.append(out_path)

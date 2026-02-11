@@ -21,7 +21,7 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
+from parcellate.interfaces.planner import plan_parcellation_workflow as plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.qsirecon import (
     _as_list,
     _build_output_path,
@@ -30,7 +30,7 @@ from parcellate.interfaces.qsirecon.qsirecon import (
     load_config,
     run_parcellations,
 )
-from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
+from parcellate.interfaces.runner import run_parcellation_workflow as run_qsirecon_parcellation_workflow
 
 
 class Recon:
@@ -195,11 +195,11 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
         lambda *args, **kwargs: [recon],
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
+        "parcellate.interfaces.qsirecon.qsirecon.plan_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.qsirecon.qsirecon.run_qsirecon_parcellation_workflow",
+        "parcellate.interfaces.qsirecon.qsirecon.run_parcellation_workflow",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Should not run when outputs exist")),
     )
 
@@ -226,7 +226,7 @@ def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.Mo
         lambda *args, **kwargs: [recon],
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.qsirecon.qsirecon.plan_qsirecon_parcellation_workflow",
+        "parcellate.interfaces.qsirecon.qsirecon.plan_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
 

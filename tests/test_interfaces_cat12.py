@@ -47,13 +47,13 @@ from parcellate.interfaces.cat12.models import (
     SubjectContext,
     TissueType,
 )
-from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
-from parcellate.interfaces.planner import _space_match
+from parcellate.interfaces.planner import (
+    _space_match,
+    plan_parcellation_workflow as plan_cat12_parcellation_workflow,
+)
 from parcellate.interfaces.runner import (
     ScalarMapSpaceMismatchError,
     _validate_scalar_map_spaces,
-)
-from parcellate.interfaces.runner import (
     run_parcellation_workflow as run_cat12_parcellation_workflow,
 )
 
@@ -581,11 +581,11 @@ def test_run_parcellations_writes_outputs(monkeypatch: pytest.MonkeyPatch, tmp_p
         lambda *args, **kwargs: [recon],
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.cat12.cat12.plan_cat12_parcellation_workflow",
+        "parcellate.interfaces.cat12.cat12.plan_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.cat12.cat12.run_cat12_parcellation_workflow",
+        "parcellate.interfaces.cat12.cat12.run_parcellation_workflow",
         lambda *args, **kwargs: [
             ParcellationOutput(context, atlas, scalar, pd.DataFrame({"index": [1], "value": [2.0]}))
         ],
@@ -635,11 +635,11 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
         lambda *args, **kwargs: [recon],
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.cat12.cat12.plan_cat12_parcellation_workflow",
+        "parcellate.interfaces.cat12.cat12.plan_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
     monkeypatch.setattr(
-        "parcellate.interfaces.cat12.cat12.run_cat12_parcellation_workflow",
+        "parcellate.interfaces.cat12.cat12.run_parcellation_workflow",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Should not run when outputs exist")),
     )
 

@@ -18,8 +18,8 @@ from parcellate.interfaces.cat12.models import (
     SubjectContext,
     TissueType,
 )
-from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
-from parcellate.interfaces.cat12.runner import run_cat12_parcellation_workflow
+from parcellate.interfaces.planner import plan_parcellation_workflow as plan_cat12_parcellation_workflow
+from parcellate.interfaces.runner import run_parcellation_workflow as run_cat12_parcellation_workflow
 
 __all__ = [
     "AtlasDefinition",

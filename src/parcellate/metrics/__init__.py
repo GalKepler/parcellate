@@ -1,3 +1,4 @@
+from parcellate.metrics.base import Statistic
 from parcellate.metrics.volume import (
     BUILTIN_STATISTICS,
     iqr_filtered_mean,
@@ -13,6 +14,7 @@ from parcellate.metrics.volume import (
 
 __all__ = [
     "BUILTIN_STATISTICS",
+    "Statistic",
     "iqr_filtered_mean",
     "iqr_filtered_std",
     "mad_median",

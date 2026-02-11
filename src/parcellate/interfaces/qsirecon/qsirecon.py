@@ -29,8 +29,8 @@ from parcellate.interfaces.qsirecon.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
-from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
+from parcellate.interfaces.planner import plan_parcellation_workflow
+from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import _as_list, _parse_log_level
 
 LOGGER = logging.getLogger(__name__)
@@ -206,7 +206,7 @@ def _run_recon(
             pending_plan[atlas] = remaining
 
     if pending_plan:
-        jobs = run_qsirecon_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
+        jobs = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in jobs:
             outputs.append(_write_output(result, destination=config.output_dir))
 
@@ -238,7 +238,7 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
                 executor.submit(
                     _run_recon,
                     recon,
-                    plan_qsirecon_parcellation_workflow(recon),
+                    plan_parcellation_workflow(recon),
                     config,
                 )
                 for recon in recon_inputs
@@ -246,7 +246,7 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
             LOGGER.info("Submitted %d parcellation jobs to the executor", len(futures))
             outputs = [future.result() for future in futures]
     else:
-        outputs = [_run_recon(recon, plan_qsirecon_parcellation_workflow(recon), config) for recon in recon_inputs]
+        outputs = [_run_recon(recon, plan_parcellation_workflow(recon), config) for recon in recon_inputs]
 
     flat_outputs = [item for sublist in outputs for item in sublist]
     LOGGER.info("Finished writing %d parcellation files", len(flat_outputs))

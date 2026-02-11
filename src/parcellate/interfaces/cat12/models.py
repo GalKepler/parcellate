@@ -9,8 +9,10 @@ from pathlib import Path
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
+    ParcellationConfig,
     ParcellationOutput,
     ReconInput,
+    ScalarMapBase,
     SubjectContext,
 )
 
@@ -28,32 +30,23 @@ class TissueType(str, Enum):
 
 
 @dataclass(frozen=True)
-class ScalarMapDefinition:
-    """Description of a scalar map available to the pipeline."""
+class ScalarMapDefinition(ScalarMapBase):
+    """Description of a scalar map available to the pipeline.
 
-    name: str
-    nifti_path: Path
+    Extends ScalarMapBase with CAT12-specific fields.
+    """
+
     tissue_type: TissueType | None = None
-    space: str | None = None
-    desc: str | None = None
 
 
 @dataclass
-class Cat12Config:
-    """Configuration parsed from TOML input."""
+class Cat12Config(ParcellationConfig):
+    """Configuration for CAT12 parcellation workflow.
 
-    input_root: Path
-    output_dir: Path
-    atlases: list[AtlasDefinition] | None = None
-    subjects: list[str] | None = None
-    sessions: list[str] | None = None
-    mask: Path | str | None = "gm"
-    background_label: int = 0
-    resampling_target: str | None = "data"
-    force: bool = False
-    log_level: int = logging.INFO
-    n_jobs: int = 1
-    n_procs: int = 1
+    Inherits from ParcellationConfig with a different default for mask.
+    """
+
+    mask: Path | str | None = "gm"  # Override: CAT12 defaults to gray matter mask
 
 
 __all__ = [

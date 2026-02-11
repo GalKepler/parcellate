@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,42 @@ if TYPE_CHECKING:
     ScalarMapDefinition = Any
 else:
     ScalarMapDefinition = "ScalarMapDefinition"
+
+
+@dataclass
+class ParcellationConfig:
+    """Base configuration for parcellation workflows.
+
+    This dataclass consolidates common configuration fields shared across
+    all parcellation interfaces (CAT12, QSIRecon, etc.).
+    """
+
+    input_root: Path
+    output_dir: Path
+    atlases: list["AtlasDefinition"] | None = None
+    subjects: list[str] | None = None
+    sessions: list[str] | None = None
+    mask: Path | str | None = None
+    background_label: int = 0
+    resampling_target: str | None = "data"
+    force: bool = False
+    log_level: int = logging.INFO
+    n_jobs: int = 1
+    n_procs: int = 1
+
+
+@dataclass(frozen=True)
+class ScalarMapBase:
+    """Base class for scalar map definitions.
+
+    This base class defines the common fields shared across all interfaces.
+    Interface-specific subclasses extend this with additional metadata.
+    """
+
+    name: str
+    nifti_path: Path
+    space: str | None = None
+    desc: str | None = None
 
 
 @dataclass(frozen=True)

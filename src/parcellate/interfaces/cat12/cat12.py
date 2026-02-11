@@ -28,8 +28,8 @@ from parcellate.interfaces.cat12.models import (
     ScalarMapDefinition,
     SubjectContext,
 )
-from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
-from parcellate.interfaces.cat12.runner import run_cat12_parcellation_workflow
+from parcellate.interfaces.planner import plan_parcellation_workflow
+from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import _as_list, _parse_log_level
 
 LOGGER = logging.getLogger(__name__)
@@ -168,7 +168,7 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
 
 def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
     """Run the parcellation workflow for a single recon."""
-    plan = plan_cat12_parcellation_workflow(recon)
+    plan = plan_parcellation_workflow(recon)
     pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
     reused_outputs: list[Path] = []
     outputs: list[Path] = []
@@ -192,7 +192,7 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
             pending_plan[atlas] = remaining
 
     if pending_plan:
-        jobs = run_cat12_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
+        jobs = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in jobs:
             outputs.append(_write_output(result, destination=config.output_dir))
 
