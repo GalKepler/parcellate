@@ -11,9 +11,11 @@ from parcellate.metrics.volume import (
     _z_score_filter,
     iqr_filtered_mean,
     iqr_filtered_std,
+    kurtosis,
     mad_median,
     robust_mean,
     robust_std,
+    skewness,
     volsum,
     voxel_count,
     z_filtered_mean,
@@ -269,3 +271,98 @@ class TestVoxelCount:
         mask = np.array([True, True, True])
         result = voxel_count(mask)
         assert result == 3
+
+
+class TestSkewness:
+    """Tests for skewness function."""
+
+    def test_symmetric_distribution_zero_skew(self) -> None:
+        """Test symmetric distribution has near-zero skewness."""
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = skewness(values)
+        assert abs(result) < 0.1  # Should be close to 0 for symmetric data
+
+    def test_positive_skew(self) -> None:
+        """Test right-skewed distribution has positive skewness."""
+        values = np.array([1.0, 1.0, 1.0, 1.0, 10.0])  # Long right tail
+        result = skewness(values)
+        assert result > 0
+
+    def test_negative_skew(self) -> None:
+        """Test left-skewed distribution has negative skewness."""
+        values = np.array([10.0, 10.0, 10.0, 10.0, 1.0])  # Long left tail
+        result = skewness(values)
+        assert result < 0
+
+    def test_constant_values_nan(self) -> None:
+        """Test constant values returns NaN."""
+        values = np.array([5.0, 5.0, 5.0, 5.0])
+        result = skewness(values)
+        assert np.isnan(result)
+
+    def test_handles_nan_values(self) -> None:
+        """Test skewness handles NaN values."""
+        values = np.array([1.0, 2.0, np.nan, 3.0, 4.0, 5.0])
+        result = skewness(values)
+        assert not np.isnan(result)  # Should compute on non-NaN values
+
+    def test_all_nan_returns_nan(self) -> None:
+        """Test all NaN values returns NaN."""
+        values = np.array([np.nan, np.nan, np.nan])
+        result = skewness(values)
+        assert np.isnan(result)
+
+    def test_normal_distribution_low_skew(self) -> None:
+        """Test normal distribution has low skewness."""
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 1000)
+        result = skewness(values)
+        assert abs(result) < 0.2  # Should be close to 0
+
+
+class TestKurtosis:
+    """Tests for kurtosis function."""
+
+    def test_normal_distribution_near_zero(self) -> None:
+        """Test normal distribution has near-zero excess kurtosis."""
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 1000)
+        result = kurtosis(values)
+        assert abs(result) < 0.5  # Excess kurtosis should be ~0 for normal
+
+    def test_heavy_tails_positive_kurtosis(self) -> None:
+        """Test heavy-tailed distribution has positive kurtosis."""
+        # Create distribution with outliers (heavy tails)
+        values = np.array([0.0] * 90 + [10.0] * 5 + [-10.0] * 5)
+        result = kurtosis(values)
+        assert result > 0
+
+    def test_light_tails_negative_kurtosis(self) -> None:
+        """Test uniform distribution has negative kurtosis."""
+        values = np.linspace(0, 10, 100)  # Uniform-like
+        result = kurtosis(values)
+        assert result < 0
+
+    def test_constant_values_nan(self) -> None:
+        """Test constant values returns NaN."""
+        values = np.array([5.0, 5.0, 5.0, 5.0])
+        result = kurtosis(values)
+        assert np.isnan(result)
+
+    def test_handles_nan_values(self) -> None:
+        """Test kurtosis handles NaN values."""
+        values = np.array([1.0, 2.0, np.nan, 3.0, 4.0, 5.0, 6.0, 7.0])
+        result = kurtosis(values)
+        assert not np.isnan(result)
+
+    def test_all_nan_returns_nan(self) -> None:
+        """Test all NaN values returns NaN."""
+        values = np.array([np.nan, np.nan, np.nan])
+        result = kurtosis(values)
+        assert np.isnan(result)
+
+    def test_minimum_sample_size(self) -> None:
+        """Test with minimum sample size."""
+        values = np.array([1.0, 2.0, 3.0, 4.0])
+        result = kurtosis(values)
+        assert isinstance(result, float)

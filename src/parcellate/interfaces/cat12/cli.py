@@ -32,6 +32,7 @@ from parcellate.interfaces.cat12.models import (
 )
 from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
 from parcellate.interfaces.cat12.runner import run_cat12_parcellation_workflow
+from parcellate.interfaces.utils import _parse_log_level
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,13 +169,6 @@ def _parse_atlases_from_env() -> list[AtlasDefinition]:
         )
 
     return atlases
-
-
-def _parse_log_level(value: str | None) -> int:
-    """Parse log level from string."""
-    if value is None:
-        return logging.INFO
-    return getattr(logging, value.upper(), logging.INFO)
 
 
 def config_from_env() -> Cat12Config:

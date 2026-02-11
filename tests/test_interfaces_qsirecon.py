@@ -23,14 +23,13 @@ from parcellate.interfaces.qsirecon.models import (
 )
 from parcellate.interfaces.qsirecon.planner import plan_qsirecon_parcellation_workflow
 from parcellate.interfaces.qsirecon.qsirecon import (
-    _as_list,
     _build_output_path,
-    _parse_log_level,
     _write_output,
     load_config,
     run_parcellations,
 )
 from parcellate.interfaces.qsirecon.runner import run_qsirecon_parcellation_workflow
+from parcellate.interfaces.utils import _as_list, _parse_log_level
 
 
 class Recon:
