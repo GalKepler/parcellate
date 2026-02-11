@@ -30,7 +30,7 @@ from parcellate.interfaces.cat12.models import (
 )
 from parcellate.interfaces.cat12.planner import plan_cat12_parcellation_workflow
 from parcellate.interfaces.cat12.runner import run_cat12_parcellation_workflow
-from parcellate.interfaces.utils import _as_list, _parse_log_level
+from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def load_config(config_path: Path) -> Cat12Config:
     sessions = _as_list(data.get("sessions"))
 
     # Parse atlas definitions
-    atlases = _parse_atlases(data.get("atlases", []))
+    atlases = parse_atlases(data.get("atlases", []), default_space="MNI152NLin2009cAsym")
 
     mask_value = data.get("mask")
     mask = Path(mask_value).expanduser().resolve() if mask_value else None
@@ -81,43 +81,6 @@ def load_config(config_path: Path) -> Cat12Config:
         n_jobs=n_jobs,
         n_procs=n_procs,
     )
-
-
-def _parse_atlases(atlas_configs: list[dict]) -> list[AtlasDefinition]:
-    """Parse atlas definitions from configuration.
-
-    Parameters
-    ----------
-    atlas_configs
-        List of atlas configuration dictionaries.
-
-    Returns
-    -------
-    list[AtlasDefinition]
-        List of parsed atlas definitions.
-    """
-    atlases = []
-    for cfg in atlas_configs:
-        name = cfg.get("name")
-        path = cfg.get("path")
-        if not name or not path:
-            LOGGER.warning("Skipping atlas with missing name or path: %s", cfg)
-            continue
-        lut = cfg.get("lut")
-        lut_path = Path(lut).expanduser().resolve() if lut else None
-        space = cfg.get("space", "MNI152NLin2009cAsym")
-        resolution = cfg.get("resolution")
-
-        atlases.append(
-            AtlasDefinition(
-                name=name,
-                nifti_path=Path(path).expanduser().resolve(),
-                lut=lut_path,
-                space=space,
-                resolution=resolution,
-            )
-        )
-    return atlases
 
 
 def _build_output_path(
