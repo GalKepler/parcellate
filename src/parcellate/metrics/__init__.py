@@ -1,3 +1,9 @@
+"""Statistical metrics for summarizing parcellated regions.
+
+Provides built-in statistics (mean, median, robust estimates, higher-order moments)
+and utilities for defining custom aggregation functions.
+"""
+
 from parcellate.metrics.base import Statistic
 from parcellate.metrics.volume import (
     BUILTIN_STATISTICS,
