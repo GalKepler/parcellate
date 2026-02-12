@@ -339,9 +339,10 @@ def _process_subject_wrapper(
     label = f"sub-{subject.subject_code}" + (f"_ses-{subject.session_id}" if subject.session_id else "")
     try:
         outputs = process_single_subject(subject, config)
-        return (label, outputs, None)
+        result = (label, outputs, None)
     except Exception as e:
-        return (label, [], str(e))
+        result = (label, [], str(e))
+    return result
 
 
 def run_parcellations_parallel(
@@ -535,7 +536,7 @@ Example .env file:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: C901
     """Entry point for CLI execution."""
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -568,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError:
         # CAT12_ROOT not set, check CLI args
         if not args.root:
-            LOGGER.error("CAT12_ROOT environment variable or --root argument is required")
+            LOGGER.exception("CAT12_ROOT environment variable or --root argument is required")
             return 1
         config = Cat12Config(
             input_root=args.root,
@@ -647,8 +648,8 @@ def main(argv: list[str] | None = None) -> int:
     # Load subjects from CSV
     try:
         subjects = load_subjects_from_csv(args.csv)
-    except Exception as e:
-        LOGGER.error("Failed to load CSV file: %s", e)
+    except Exception:
+        LOGGER.exception("Failed to load CSV file")
         return 1
 
     if not subjects:

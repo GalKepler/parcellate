@@ -1,0 +1,97 @@
+# QSIRecon Parcellation Configuration Example
+# =============================================
+# This file demonstrates how to configure parcellate for processing QSIRecon diffusion outputs.
+# See https://GalKepler.github.io/parcellate/ for full documentation.
+
+# Input/Output Paths
+# ------------------
+# Path to QSIRecon derivatives directory (BIDS-compatible)
+input_root = "/data/qsirecon_derivatives"
+
+# Output directory for parcellation results
+output_dir = "/data/parcellations"
+
+# Subject/Session Selection
+# -------------------------
+# Optional: Process specific subjects (default: all discovered)
+# subjects = ["sub-01", "sub-02"]
+
+# Optional: Process specific sessions (default: all discovered)
+sessions = ["ses-01"]
+
+# Processing Options
+# ------------------
+# Overwrite existing outputs
+force = false
+
+# Logging verbosity
+log_level = "INFO"
+
+# Parallel jobs within subject
+n_jobs = 4
+
+# Parallel processes across subjects
+n_procs = 1
+
+# Optional: Brain mask (path or builtin: "gm", "wm", "brain")
+# mask = "/path/to/mask.nii.gz"
+
+# Atlas Definitions
+# -----------------
+# Define atlases for parcellating diffusion scalar maps
+# QSIRecon typically produces maps in MNI152NLin6Asym space
+
+[[atlases]]
+name = "JHU"
+path = "/atlases/JHU-ICBM-labels-1mm.nii.gz"
+lut = "/atlases/JHU-ICBM-labels-1mm.tsv"
+space = "MNI152NLin6Asym"
+
+[[atlases]]
+name = "Schaefer400"
+path = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
+lut = "/atlases/Schaefer2018_400Parcels_7Networks_order.tsv"
+space = "MNI152NLin6Asym"
+
+# Expected Input Structure
+# -------------------------
+# QSIRecon organizes outputs by workflow:
+# qsirecon_derivatives/
+# └── derivatives/
+#     └── qsirecon-{workflow_name}/
+#         └── sub-01/
+#             └── ses-01/
+#                 └── dwi/
+#                     ├── sub-01_ses-01_space-MNI152NLin6Asym_param-FA_dwimap.nii.gz
+#                     ├── sub-01_ses-01_space-MNI152NLin6Asym_param-MD_dwimap.nii.gz
+#                     ├── sub-01_ses-01_space-MNI152NLin6Asym_param-AD_dwimap.nii.gz
+#                     └── sub-01_ses-01_space-MNI152NLin6Asym_param-RD_dwimap.nii.gz
+
+# Expected Output Structure
+# --------------------------
+# parcellations/
+# └── sub-01/
+#     └── ses-01/
+#         └── dwi/
+#             ├── sub-01_ses-01_space-MNI152NLin6Asym_atlas-JHU_param-FA_stats.tsv
+#             ├── sub-01_ses-01_space-MNI152NLin6Asym_atlas-JHU_param-MD_stats.tsv
+#             ├── sub-01_ses-01_space-MNI152NLin6Asym_atlas-Schaefer400_param-FA_stats.tsv
+#             └── ...
+
+# Supported Diffusion Parameters
+# -------------------------------
+# QSIRecon can generate various scalar maps (param-*):
+# - FA: Fractional anisotropy
+# - MD: Mean diffusivity
+# - AD: Axial diffusivity
+# - RD: Radial diffusivity
+# - MO: Mode of anisotropy
+# - And more depending on reconstruction workflow
+
+# Notes
+# -----
+# - Scalar maps are automatically discovered in workflow-specific subdirectories
+# - Multiple workflows can be processed (all under derivatives/ are scanned)
+# - Atlas and scalar maps are matched by 'space' field
+# - Use force=true to regenerate existing outputs
+# - Multi-session support: each session is processed independently

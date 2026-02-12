@@ -1,0 +1,93 @@
+# CAT12 Parcellation Configuration Example
+# =========================================
+# This file demonstrates how to configure parcellate for processing CAT12 VBM outputs.
+# See https://GalKepler.github.io/parcellate/ for full documentation.
+
+# Input/Output Paths
+# ------------------
+# Path to CAT12 derivatives directory (BIDS-compatible)
+input_root = "/data/cat12_derivatives"
+
+# Output directory for parcellation results
+# If not specified, defaults to {input_root}/parcellations
+output_dir = "/data/parcellations"
+
+# Subject/Session Selection
+# -------------------------
+# Optional: Process specific subjects (default: all discovered)
+subjects = ["sub-01", "sub-02", "sub-03"]
+
+# Optional: Process specific sessions (default: all discovered)
+# Uncomment to restrict to specific sessions:
+# sessions = ["ses-baseline", "ses-followup"]
+
+# Processing Options
+# ------------------
+# Overwrite existing outputs (default: false)
+force = false
+
+# Logging verbosity: "DEBUG", "INFO", "WARNING", "ERROR"
+log_level = "INFO"
+
+# Parallel jobs within subject (for processing multiple atlases/maps simultaneously)
+# Set to -1 to use all available cores
+n_jobs = 4
+
+# Parallel processes across subjects
+# Set to 1 for sequential processing, higher values for parallel subject processing
+n_procs = 2
+
+# Optional: Brain mask to restrict parcellation
+# Can be:
+# - Path to custom mask NIfTI: "/path/to/mask.nii.gz"
+# - Builtin mask name: "gm", "wm", or "brain"
+# - Omit this line for no masking
+# mask = "/path/to/mask.nii.gz"
+
+# Atlas Definitions
+# -----------------
+# Define one or more atlases for parcellation
+# Each atlas requires:
+# - name: Identifier for the atlas
+# - path: Path to NIfTI file with integer region labels
+# - space: Template space (e.g., "MNI152NLin2009cAsym")
+# - lut (optional): Path to TSV lookup table with columns 'index' and 'label'
+
+[[atlases]]
+name = "Schaefer400"
+path = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
+lut = "/atlases/Schaefer2018_400Parcels_7Networks_order.tsv"
+space = "MNI152NLin2009cAsym"
+
+[[atlases]]
+name = "AAL3"
+path = "/atlases/AAL3v1_1mm.nii.gz"
+lut = "/atlases/AAL3v1.tsv"
+space = "MNI152NLin2009cAsym"
+
+[[atlases]]
+name = "Brainnetome"
+path = "/atlases/BNA_MPM_thr25_1.25mm.nii.gz"
+lut = "/atlases/BNA_MPM.tsv"
+space = "MNI152NLin2009cAsym"
+
+# Expected Output Structure
+# --------------------------
+# parcellations/
+# └── sub-01/
+#     └── anat/
+#         ├── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-gm_stats.tsv
+#         ├── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-wm_stats.tsv
+#         ├── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-ct_stats.tsv
+#         ├── sub-01_space-MNI152NLin2009cAsym_atlas-AAL3_desc-gm_stats.tsv
+#         └── ...
+
+# Notes
+# -----
+# - CAT12 maps are automatically discovered in {input_root}/sub-*/anat/
+# - Supported map types:
+#   - Gray matter: mwp1*.nii.gz (modulated warped GM)
+#   - White matter: mwp2*.nii.gz (modulated warped WM)
+#   - Cortical thickness: lh.thickness.*.gii, rh.thickness.*.gii
+# - Atlas and scalar maps are matched by 'space' field
+# - Use force=true to regenerate existing outputs
