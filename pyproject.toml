@@ -48,9 +48,6 @@ dev = [
     "mypy>=0.991",
     "pytest-cov>=4.0.0",
     "ruff>=0.11.5",
-    "mkdocs>=1.4.2",
-    "mkdocs-material>=8.5.10",
-    "mkdocstrings[python]>=0.26.1",
 ]
 
 [build-system]
@@ -130,6 +127,11 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["src"]
+
+[tool.deptry]
+# Map package names to module names when they differ
+[tool.deptry.package_module_name_map]
+python-dotenv = "dotenv"
 
 [tool.flake8]
 max-line-length = 120
