@@ -29,6 +29,7 @@ from parcellate.interfaces.qsirecon.qsirecon import (
     run_parcellations,
 )
 from parcellate.interfaces.runner import run_parcellation_workflow as run_qsirecon_parcellation_workflow
+from parcellate.interfaces.utils import _as_list, _parse_log_level
 
 
 class Recon:

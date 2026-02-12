@@ -43,12 +43,10 @@ def synthetic_atlas(tmp_path: Path) -> tuple[Path, Path]:
     nib.save(img, atlas_path)
 
     # Create LUT
-    lut = pd.DataFrame(
-        {
-            "index": [1, 2, 3],
-            "label": ["Region_1", "Region_2", "Region_3"],
-        }
-    )
+    lut = pd.DataFrame({
+        "index": [1, 2, 3],
+        "label": ["Region_1", "Region_2", "Region_3"],
+    })
     lut_path = tmp_path / "atlas_lut.tsv"
     lut.to_csv(lut_path, sep="\t", index=False)
 
@@ -78,7 +76,7 @@ class TestCAT12Integration:
         config_file = tmp_path / "cat12_config.toml"
         config_content = f"""
 input_root = "{cat12_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 force = true
 log_level = "INFO"
 n_jobs = 1
@@ -112,9 +110,7 @@ space = "MNI152NLin2009cAsym"
         assert "std" in df.columns
         assert len(df) == 3  # Three regions
 
-    def test_skip_existing_outputs(
-        self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]
-    ) -> None:
+    def test_skip_existing_outputs(self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]) -> None:
         """Test that existing outputs are skipped when force=False."""
         atlas_path, lut_path = synthetic_atlas
 
@@ -131,7 +127,7 @@ space = "MNI152NLin2009cAsym"
         config_file = tmp_path / "config.toml"
         config_content = f"""
 input_root = "{cat12_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 force = false
 
 [[atlases]]
@@ -157,14 +153,12 @@ space = "MNI152NLin2009cAsym"
         time.sleep(0.01)
 
         # Run second time with force=False
-        outputs2 = run_cat12_parcellations(config)
+        _ = run_cat12_parcellations(config)
 
         # File should not be overwritten
         assert output_file.stat().st_mtime == original_mtime
 
-    def test_force_flag_overwrites_existing(
-        self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]
-    ) -> None:
+    def test_force_flag_overwrites_existing(self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]) -> None:
         """Test that force=True overwrites existing outputs."""
         atlas_path, lut_path = synthetic_atlas
 
@@ -181,7 +175,7 @@ space = "MNI152NLin2009cAsym"
         config_file = tmp_path / "config.toml"
         config_content = f"""
 input_root = "{cat12_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 force = true
 
 [[atlases]]
@@ -204,7 +198,7 @@ space = "MNI152NLin2009cAsym"
         time.sleep(0.01)
 
         # Run second time with force=True
-        outputs2 = run_cat12_parcellations(config)
+        _ = run_cat12_parcellations(config)
 
         # File should be overwritten (or at least touched)
         assert output_file.stat().st_mtime >= original_mtime
@@ -213,9 +207,7 @@ space = "MNI152NLin2009cAsym"
 class TestQSIReconIntegration:
     """Integration tests for QSIRecon pipeline."""
 
-    def test_full_pipeline_with_synthetic_data(
-        self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]
-    ) -> None:
+    def test_full_pipeline_with_synthetic_data(self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]) -> None:
         """Test complete QSIRecon pipeline with synthetic data."""
         atlas_path, lut_path = synthetic_atlas
 
@@ -234,7 +226,7 @@ class TestQSIReconIntegration:
         config_file = tmp_path / "qsi_config.toml"
         config_content = f"""
 input_root = "{qsi_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 force = true
 log_level = "INFO"
 
@@ -292,7 +284,7 @@ space = "MNI152NLin2009cAsym"
         config_file = tmp_path / "config.toml"
         config_content = f"""
 input_root = "{qsi_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 """
         config_file.write_text(config_content)
 
@@ -321,9 +313,7 @@ output_dir = "{tmp_path / 'output'}"
 class TestMultiSessionSupport:
     """Integration tests for multi-session processing."""
 
-    def test_qsirecon_processes_multiple_sessions(
-        self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]
-    ) -> None:
+    def test_qsirecon_processes_multiple_sessions(self, tmp_path: Path, synthetic_atlas: tuple[Path, Path]) -> None:
         """Test QSIRecon processes all sessions per subject."""
         atlas_path, lut_path = synthetic_atlas
 
@@ -347,7 +337,7 @@ class TestMultiSessionSupport:
         config_file = tmp_path / "config.toml"
         config_content = f"""
 input_root = "{qsi_root}"
-output_dir = "{tmp_path / 'output'}"
+output_dir = "{tmp_path / "output"}"
 
 [[atlases]]
 name = "TestAtlas"

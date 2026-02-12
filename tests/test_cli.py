@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -68,15 +68,13 @@ class TestMainCLI:
         with patch("parcellate.interfaces.qsirecon.qsirecon.main") as mock_main:
             mock_main.return_value = 0
 
-            result = main(
-                [
-                    "qsirecon",
-                    "--config",
-                    "config.toml",
-                    "--input-root",
-                    "/data",
-                ]
-            )
+            result = main([
+                "qsirecon",
+                "--config",
+                "config.toml",
+                "--input-root",
+                "/data",
+            ])
 
             assert result == 0
             mock_main.assert_called_once()

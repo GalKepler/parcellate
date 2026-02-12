@@ -5,9 +5,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import pytest
-
-from parcellate.interfaces.models import AtlasDefinition
 from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
 
 
