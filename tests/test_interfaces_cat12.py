@@ -495,7 +495,24 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
         ])
     )
 
-    config = load_config(cfg_path)
+    # Create argparse.Namespace with config path
+    import argparse
+
+    args = argparse.Namespace(
+        config=cfg_path,
+        input_root=None,
+        output_dir=None,
+        atlas_config=None,
+        subjects=None,
+        sessions=None,
+        mask=None,
+        force=False,
+        log_level=None,
+        n_jobs=None,
+        n_procs=None,
+    )
+
+    config = load_config(args)
 
     assert config.input_root == Path("~/data").expanduser().resolve()
     assert config.output_dir == Path("outdir").expanduser().resolve()

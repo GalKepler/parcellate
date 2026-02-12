@@ -91,7 +91,22 @@ space = "MNI152NLin2009cAsym"
         config_file.write_text(config_content)
 
         # Load config and run
-        config = load_cat12_config(config_file)
+        import argparse
+
+        args = argparse.Namespace(
+            config=config_file,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_cat12_config(args)
         outputs = run_cat12_parcellations(config)
 
         # Verify outputs

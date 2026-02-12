@@ -33,8 +33,8 @@ from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlase
 LOGGER = logging.getLogger(__name__)
 
 
-def load_config(config_path: Path) -> Cat12Config:
-    """Parse a TOML configuration file.
+def load_config(args: argparse.Namespace) -> Cat12Config:
+    """Parse a TOML configuration file and override with CLI arguments.
 
     The configuration expects the following keys:
     - ``input_root``: Root directory of CAT12 derivatives.
@@ -49,23 +49,34 @@ def load_config(config_path: Path) -> Cat12Config:
     - ``n_procs``: Number of parallel processes for across-subject parcellation.
     """
 
-    with config_path.open("rb") as f:
-        data = tomllib.load(f)
+    data = {}
+    if args.config:
+        with args.config.open("rb") as f:
+            data = tomllib.load(f)
 
-    input_root = Path(data.get("input_root", ".")).expanduser().resolve()
-    output_dir = Path(data.get("output_dir", input_root / "parcellations")).expanduser().resolve()
-    subjects = _as_list(data.get("subjects"))
-    sessions = _as_list(data.get("sessions"))
+    input_root_str = args.input_root or data.get("input_root", ".")
+    input_root = Path(input_root_str).expanduser().resolve()
+    output_dir_str = args.output_dir or data.get("output_dir", input_root / "parcellations")
+    output_dir = Path(output_dir_str).expanduser().resolve()
+    subjects = args.subjects or _as_list(data.get("subjects"))
+    sessions = args.sessions or _as_list(data.get("sessions"))
 
     # Parse atlas definitions
-    atlases = parse_atlases(data.get("atlases", []), default_space="MNI152NLin2009cAsym")
+    atlas_configs = []
+    if args.atlas_config:
+        for atlas_path in args.atlas_config:
+            with atlas_path.open("rb") as f:
+                atlas_configs.append(tomllib.load(f))
+    else:
+        atlas_configs = data.get("atlases", [])
+    atlases = parse_atlases(atlas_configs, default_space="MNI152NLin2009cAsym")
 
-    mask_value = data.get("mask")
+    mask_value = args.mask or data.get("mask")
     mask = Path(mask_value).expanduser().resolve() if mask_value else None
-    force = bool(data.get("force", False))
-    log_level = _parse_log_level(data.get("log_level"))
-    n_jobs = int(data.get("n_jobs", 1))
-    n_procs = int(data.get("n_procs", 1))
+    force = args.force or bool(data.get("force", False))
+    log_level = _parse_log_level(args.log_level or data.get("log_level"))
+    n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
+    n_procs = args.n_procs or int(data.get("n_procs", 1))
 
     return Cat12Config(
         input_root=input_root,
@@ -189,23 +200,74 @@ def run_parcellations(config: Cat12Config) -> list[Path]:
     return flat_outputs
 
 
-def build_arg_parser() -> argparse.ArgumentParser:
-    """Create the CLI argument parser."""
+def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Add CLI arguments to the parser."""
 
-    parser = argparse.ArgumentParser(description="Run parcellations for CAT12 derivatives.")
     parser.add_argument(
-        "config",
+        "--input-root",
         type=Path,
-        help="Path to a TOML configuration file describing inputs and outputs.",
+        help="Root directory of CAT12 derivatives.",
     )
-    return parser
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Destination directory for parcellation outputs.",
+    )
+    parser.add_argument(
+        "--atlas-config",
+        type=Path,
+        nargs="+",
+        help="Path to one or more TOML files defining atlases.",
+    )
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        help="List of subject identifiers to process.",
+    )
+    parser.add_argument(
+        "--sessions",
+        nargs="+",
+        help="List of session identifiers to process.",
+    )
+    parser.add_argument(
+        "--mask",
+        type=Path,
+        help="Optional path to a brain mask to apply during parcellation.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Whether to overwrite existing parcellation outputs.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging verbosity (e.g., INFO, DEBUG).",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        help="Number of parallel jobs for within-subject parcellation.",
+    )
+    parser.add_argument(
+        "--n-procs",
+        type=int,
+        help="Number of parallel processes for across-subject parcellation.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to a TOML configuration file.",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for CLI execution."""
 
-    args = build_arg_parser().parse_args(argv)
-    config = load_config(args.config)
+    parser = argparse.ArgumentParser(description="Run parcellations for CAT12 derivatives.")
+    add_cli_args(parser)
+    args = parser.parse_args(argv)
+    config = load_config(args)
 
     try:
         run_parcellations(config)
