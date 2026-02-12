@@ -170,13 +170,6 @@ def _parse_atlases_from_env() -> list[AtlasDefinition]:
     return atlases
 
 
-def _parse_log_level(value: str | None) -> int:
-    """Parse log level from string."""
-    if value is None:
-        return logging.INFO
-    return getattr(logging, value.upper(), logging.INFO)
-
-
 def config_from_env() -> Cat12Config:
     """Create a Cat12Config from environment variables.
 

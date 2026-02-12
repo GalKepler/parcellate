@@ -58,7 +58,7 @@ def load_config(args: argparse.Namespace) -> QSIReconConfig:
                 atlas_configs.append(tomllib.load(f))
     else:
         atlas_configs = data.get("atlases", [])
-    atlases = _parse_atlases(atlas_configs)
+    atlases = parse_atlases(atlas_configs)  # No default space for QSIRecon
 
     mask_value = args.mask or data.get("mask")
     mask = Path(mask_value).expanduser().resolve() if mask_value else None
@@ -79,43 +79,6 @@ def load_config(args: argparse.Namespace) -> QSIReconConfig:
         n_jobs=n_jobs,
         n_procs=n_procs,
     )
-
-
-def _parse_atlases(atlas_configs: list[dict]) -> list[AtlasDefinition]:
-    """Parse atlas definitions from configuration.
-
-    Parameters
-    ----------
-    atlas_configs
-        List of atlas configuration dictionaries.
-
-    Returns
-    -------
-    list[AtlasDefinition]
-        List of parsed atlas definitions.
-    """
-    atlases = []
-    for cfg in atlas_configs:
-        name = cfg.get("name")
-        path = cfg.get("path")
-        if not name or not path:
-            LOGGER.warning("Skipping atlas with missing name or path: %s", cfg)
-            continue
-        lut = cfg.get("lut")
-        lut_path = Path(lut).expanduser().resolve() if lut else None
-        space = cfg.get("space")
-        resolution = cfg.get("resolution")
-
-        atlases.append(
-            AtlasDefinition(
-                name=name,
-                nifti_path=Path(path).expanduser().resolve(),
-                lut=lut_path,
-                space=space,
-                resolution=resolution,
-            )
-        )
-    return atlases
 
 
 def _build_output_path(

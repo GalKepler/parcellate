@@ -23,9 +23,7 @@ from parcellate.interfaces.qsirecon.models import (
     SubjectContext,
 )
 from parcellate.interfaces.qsirecon.qsirecon import (
-    _as_list,
     _build_output_path,
-    _parse_log_level,
     _write_output,
     load_config,
     run_parcellations,

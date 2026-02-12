@@ -9,10 +9,7 @@ import pandas as pd
 import pytest
 
 from parcellate.interfaces.cat12.cat12 import (
-    _as_list,
     _build_output_path,
-    _parse_atlases,
-    _parse_log_level,
     _write_output,
     load_config,
     run_parcellations,
@@ -24,9 +21,6 @@ from parcellate.interfaces.cat12.cli import (
     config_from_env,
     load_subjects_from_csv,
     main,
-)
-from parcellate.interfaces.cat12.cli import (
-    _parse_log_level as cli_parse_log_level,
 )
 from parcellate.interfaces.cat12.loader import (
     TISSUE_PATTERNS,
@@ -60,6 +54,7 @@ from parcellate.interfaces.runner import (
 from parcellate.interfaces.runner import (
     run_parcellation_workflow as run_cat12_parcellation_workflow,
 )
+from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
 
 # --- Model Tests ---
 
@@ -456,12 +451,13 @@ def test_parse_atlases() -> None:
         },
     ]
 
-    atlases = _parse_atlases(atlas_configs)
+    atlases = parse_atlases(atlas_configs, default_space="MNI152NLin2009cAsym")
 
     assert len(atlases) == 2
     assert atlases[0].name == "Schaefer400"
     assert atlases[0].lut is not None
     assert atlases[1].name == "AAL"
+    assert atlases[1].space == "MNI152NLin2009cAsym"  # Should get default space
     assert atlases[1].space == "MNI152NLin2009cAsym"  # default
 
 
@@ -473,7 +469,7 @@ def test_parse_atlases_skips_invalid() -> None:
         {"path": "/path/to/missing_name.nii.gz"},
     ]
 
-    atlases = _parse_atlases(atlas_configs)
+    atlases = parse_atlases(atlas_configs)
 
     assert len(atlases) == 1
     assert atlases[0].name == "Valid"
@@ -696,10 +692,10 @@ def test_load_subjects_from_csv_missing_column(tmp_path: Path) -> None:
 
 
 def test_cli_parse_log_level() -> None:
-    """Test log level parsing in CLI."""
-    assert cli_parse_log_level(None) == logging.INFO
-    assert cli_parse_log_level("DEBUG") == logging.DEBUG
-    assert cli_parse_log_level("warning") == logging.WARNING
+    """Test log level parsing in CLI (uses shared _parse_log_level)."""
+    assert _parse_log_level(None) == logging.INFO
+    assert _parse_log_level("DEBUG") == logging.DEBUG
+    assert _parse_log_level("warning") == logging.WARNING
 
 
 def test_parse_atlases_from_env_empty(monkeypatch: pytest.MonkeyPatch) -> None:
