@@ -6,10 +6,11 @@ This module provides functions for running parcellation workflows.
 import logging
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Protocol, Union
+from typing import Optional, Union
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
+    ParcellationConfig,
     ParcellationOutput,
     ReconInput,
 )
@@ -44,19 +45,6 @@ def _validate_scalar_map_spaces(scalar_maps: list) -> None:
     spaces = {sm.space for sm in scalar_maps}
     if len(spaces) > 1:
         raise ScalarMapSpaceMismatchError(spaces)
-
-
-class ParcellationConfig(Protocol):
-    """A protocol for parcellation configuration objects.
-
-    This protocol defines the configuration parameters for a parcellation
-    workflow.
-    """
-
-    mask: Optional[str]
-    background_label: int
-    resampling_target: Optional[str]
-    n_jobs: int
 
 
 def _parcellate_scalar_map(

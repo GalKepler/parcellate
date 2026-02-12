@@ -2,48 +2,37 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
+    ParcellationConfig,
     ParcellationOutput,
     ReconInput,
+    ScalarMapBase,
     SubjectContext,
 )
 
 
 @dataclass(frozen=True)
-class ScalarMapDefinition:
-    """Description of a scalar map available to the pipeline."""
+class ScalarMapDefinition(ScalarMapBase):
+    """Description of a scalar map available to the pipeline.
 
-    name: str
-    nifti_path: Path
+    Extends ScalarMapBase with QSIRecon-specific fields.
+    """
+
     param: str | None = None
     model: str | None = None
     origin: str | None = None
-    space: str | None = None
-    desc: str | None = None
     recon_workflow: str | None = None
 
 
 @dataclass
-class QSIReconConfig:
-    """Configuration parsed from TOML input."""
+class QSIReconConfig(ParcellationConfig):
+    """Configuration for QSIRecon parcellation workflow.
 
-    input_root: Path
-    output_dir: Path
-    atlases: list[AtlasDefinition] | None = None
-    subjects: list[str] | None = None
-    sessions: list[str] | None = None
-    mask: Path | None = None
-    background_label: int = 0
-    resampling_target: str | None = "data"
-    force: bool = False
-    log_level: int = logging.INFO
-    n_jobs: int = 1
-    n_procs: int = 1
+    Inherits all fields from ParcellationConfig with no overrides.
+    """
 
 
 __all__ = [
