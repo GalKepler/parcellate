@@ -425,12 +425,6 @@ def excess_kurtosis(values):
     return float(scipy_kurtosis(values, nan_policy="omit"))
 
 
-# Backward compatibility: old function name
-def kurtosis(values):
-    """Alias for excess_kurtosis for backward compatibility."""
-    return excess_kurtosis(values)
-
-
 def abs_skewness(values):
     """
     Absolute value of skewness.
