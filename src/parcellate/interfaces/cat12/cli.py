@@ -32,6 +32,7 @@ from parcellate.interfaces.cat12.models import (
 )
 from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
+from parcellate.interfaces.utils import _parse_log_level
 
 LOGGER = logging.getLogger(__name__)
 

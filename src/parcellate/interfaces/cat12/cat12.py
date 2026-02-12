@@ -12,8 +12,6 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-import pandas as pd
-
 try:  # Python 3.11+
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
@@ -30,7 +28,7 @@ from parcellate.interfaces.cat12.models import (
 )
 from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
-from parcellate.interfaces.utils import _as_list, _parse_log_level
+from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
 
 LOGGER = logging.getLogger(__name__)
 
@@ -147,7 +145,6 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
             )
             if not config.force and out_path.exists():
                 LOGGER.info("Reusing existing parcellation output at %s", out_path)
-                _ = pd.read_csv(out_path, sep="\t")
                 reused_outputs.append(out_path)
             else:
                 remaining.append(scalar_map)

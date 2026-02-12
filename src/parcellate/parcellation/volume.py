@@ -297,11 +297,25 @@ class VolumetricParcellator:
         else:
             ref_img = self.scalar_img
             interpolation = "nearest"
-        self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation="nearest")
+
+        # Cache atlas resampling by reference image identity (optimization 4.2)
+        ref_id = id(ref_img)
+        if not hasattr(self, "_cached_atlas_ref_id") or self._cached_atlas_ref_id != ref_id:
+            self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation="nearest")
+            self._cached_atlas_ref_id = ref_id
+            # Reset mask cache when atlas cache is invalidated
+            if hasattr(self, "_cached_mask_ref_id"):
+                delattr(self, "_cached_mask_ref_id")
+
         self._prepared_scalar_img = self._prepare_map(self.scalar_img, ref_img, interpolation=interpolation)
+
+        # Cache mask resampling by reference image identity (optimization 4.1)
         if self.mask is not None:
-            self._prepared_mask = self._prepare_map(self.mask, ref_img, interpolation="nearest")
+            if not hasattr(self, "_cached_mask_ref_id") or self._cached_mask_ref_id != ref_id:
+                self._prepared_mask = self._prepare_map(self.mask, ref_img, interpolation="nearest")
+                self._cached_mask_ref_id = ref_id
             self._prepared_atlas_img = self._apply_mask_to_atlas()
+
         self.ref_img = ref_img
         if isinstance(scalar_img, (str, Path)):
             self._fitted_scalar_id = str(scalar_img)
@@ -320,11 +334,7 @@ class VolumetricParcellator:
         if not hasattr(self, "_prepared_atlas_img") or not hasattr(self, "_prepared_scalar_img"):
             raise ParcellatorNotFittedError()
 
-        current_scalar_id: str | int
-        if isinstance(scalar_img, (str, Path)):
-            current_scalar_id = str(scalar_img)
-        else:
-            current_scalar_id = id(scalar_img)
+        current_scalar_id: str | int = str(scalar_img) if isinstance(scalar_img, (str, Path)) else id(scalar_img)
 
         if self._fitted_scalar_id == current_scalar_id:
             prepared_scalar_img = self._prepared_scalar_img
