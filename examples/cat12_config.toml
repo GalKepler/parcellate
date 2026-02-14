@@ -6,16 +6,15 @@
 # Input/Output Paths
 # ------------------
 # Path to CAT12 derivatives directory (BIDS-compatible)
-input_root = "/data/cat12_derivatives"
+input_root = "/media/storage/yalab-dev/BIDS/derivatives/CAT12.9_2577.new"
 
 # Output directory for parcellation results
 # If not specified, defaults to {input_root}/parcellations
-output_dir = "/data/parcellations"
-
+output_dir = "/media/storage/yalab-dev/BIDS/derivatives/cat12_parcellated"
 # Subject/Session Selection
 # -------------------------
 # Optional: Process specific subjects (default: all discovered)
-subjects = ["sub-01", "sub-02", "sub-03"]
+# subjects = ["sub-01", "sub-02", "sub-03"]
 
 # Optional: Process specific sessions (default: all discovered)
 # Uncomment to restrict to specific sessions:
@@ -24,18 +23,18 @@ subjects = ["sub-01", "sub-02", "sub-03"]
 # Processing Options
 # ------------------
 # Overwrite existing outputs (default: false)
-force = false
+force = true
 
 # Logging verbosity: "DEBUG", "INFO", "WARNING", "ERROR"
 log_level = "INFO"
 
 # Parallel jobs within subject (for processing multiple atlases/maps simultaneously)
 # Set to -1 to use all available cores
-n_jobs = 4
+n_jobs = 20
 
 # Parallel processes across subjects
 # Set to 1 for sequential processing, higher values for parallel subject processing
-n_procs = 2
+n_procs = 20
 
 # Optional: Brain mask to restrict parcellation
 # Can be:
@@ -54,22 +53,11 @@ n_procs = 2
 # - lut (optional): Path to TSV lookup table with columns 'index' and 'label'
 
 [[atlases]]
-name = "Schaefer400"
-path = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
-lut = "/atlases/Schaefer2018_400Parcels_7Networks_order.tsv"
+name = "Schaefer2018N400n7Tian2020S3"
+path = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_space-MNI152NLin2009cAsym_res-01_dseg.nii.gz"
+lut = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_dseg.tsv"
 space = "MNI152NLin2009cAsym"
-
-[[atlases]]
-name = "AAL3"
-path = "/atlases/AAL3v1_1mm.nii.gz"
-lut = "/atlases/AAL3v1.tsv"
-space = "MNI152NLin2009cAsym"
-
-[[atlases]]
-name = "Brainnetome"
-path = "/atlases/BNA_MPM_thr25_1.25mm.nii.gz"
-lut = "/atlases/BNA_MPM.tsv"
-space = "MNI152NLin2009cAsym"
+resolution = "01"
 
 # Expected Output Structure
 # --------------------------

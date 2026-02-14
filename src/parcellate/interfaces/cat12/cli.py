@@ -203,8 +203,8 @@ def config_from_env() -> Cat12Config:
     output_dir_str = os.getenv(ENV_OUTPUT_DIR)
     output_dir = Path(output_dir_str).expanduser().resolve() if output_dir_str else input_root / "parcellations"
 
-    mask_str = os.getenv(ENV_MASK)
-    mask = Path(mask_str).expanduser().resolve() if mask_str else None
+    mask = os.getenv(ENV_MASK)
+    # mask = Path(mask_str).expanduser().resolve() if mask_str else None
 
     atlases = _parse_atlases_from_env()
     log_level = _parse_log_level(os.getenv(ENV_LOG_LEVEL))
