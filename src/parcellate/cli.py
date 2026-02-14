@@ -20,10 +20,10 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command")
 
     # --- cat12 subcommand ---
-    cat12_parser = subparsers.add_parser("cat12", help="Run parcellations for CAT12 derivatives.")
-    cat12_parser.add_argument(
-        "config",
-        help="Path to a TOML configuration file.",
+    _ = subparsers.add_parser(
+        "cat12",
+        help="Run parcellations for CAT12 derivatives.",
+        add_help=False,
     )
 
     # --- qsirecon subcommand ---

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from parcellate.interfaces.cat12.cat12 import (
-    build_arg_parser,
+    add_cli_args,
     load_config,
     run_parcellations,
 )
@@ -40,7 +41,7 @@ space = "MNI152NLin2009cAsym"
 
         with patch("parcellate.interfaces.cat12.cat12.run_parcellations") as mock_run:
             mock_run.return_value = []
-            result = cat12_main([str(config_file)])
+            result = cat12_main(["--config", str(config_file)])
 
             assert result == 0
             mock_run.assert_called_once()
@@ -62,17 +63,18 @@ space = "MNI152NLin2009cAsym"
 
         with patch("parcellate.interfaces.cat12.cat12.run_parcellations") as mock_run:
             mock_run.side_effect = RuntimeError("Test error")
-            result = cat12_main([str(config_file)])
+            result = cat12_main(["--config", str(config_file)])
 
             assert result == 1
 
-    def test_build_arg_parser(self) -> None:
-        """Test argument parser creation."""
-        parser = build_arg_parser()
+    def test_add_cli_args(self) -> None:
+        """Test CLI arguments are added correctly."""
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
         assert parser is not None
 
-        # Test that it accepts config argument
-        args = parser.parse_args(["config.toml"])
+        # Test that it accepts --config flag
+        args = parser.parse_args(["--config", "config.toml"])
         assert args.config == Path("config.toml")
 
 
@@ -118,7 +120,20 @@ space = "MNI152NLin2009cAsym"
 """
         )
 
-        config = load_config(config_file)
+        args = argparse.Namespace(
+            config=config_file,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_config(args)
         outputs = run_parcellations(config)
 
         # Should have created output
@@ -150,7 +165,20 @@ space = "MNI152NLin2009cAsym"
 """
         )
 
-        config = load_config(config_file)
+        args = argparse.Namespace(
+            config=config_file,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_config(args)
         outputs = run_parcellations(config)
 
         # Should return empty list
