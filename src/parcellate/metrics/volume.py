@@ -4,17 +4,8 @@ A battery of volumetric parcellation statistics.
 
 import nibabel as nib
 import numpy as np
-from scipy.stats import (
-    entropy,
-    iqr,
-    normaltest,
-    probplot,
-    shapiro,
-    skew,
-)
-from scipy.stats import (
-    kurtosis as scipy_kurtosis,
-)
+from scipy.stats import entropy, iqr, normaltest, probplot, shapiro, skew
+from scipy.stats import kurtosis as scipy_kurtosis
 
 from parcellate.metrics.base import Statistic
 
@@ -366,7 +357,11 @@ def quartile_dispersion(values):
     Scale-free measure of dispersion. Bounded between 0 and 1.
     Less affected by extreme values than CV.
     """
-    q1, q3 = np.percentile(values, [25, 75])
+    clean = np.asarray(values)
+    clean = clean[np.isfinite(clean)]
+    if len(clean) == 0:
+        return float("nan")
+    q1, q3 = np.percentile(clean, [25, 75])
     return (q3 - q1) / (q3 + q1 + 1e-10)
 
 
@@ -574,11 +569,15 @@ def prop_outliers_iqr(values):
     More robust than SD-based outlier detection. This is the standard boxplot
     definition of outliers. Problematic if > 0.05 (5%).
     """
-    q1, q3 = np.percentile(values, [25, 75])
+    clean = np.asarray(values)
+    clean = clean[np.isfinite(clean)]
+    if len(clean) == 0:
+        return float("nan")
+    q1, q3 = np.percentile(clean, [25, 75])
     iqr_val = q3 - q1
     lower_fence = q1 - 1.5 * iqr_val
     upper_fence = q3 + 1.5 * iqr_val
-    return np.mean((values < lower_fence) | (values > upper_fence))
+    return float(np.mean((clean < lower_fence) | (clean > upper_fence)))
 
 
 # =============================================================================

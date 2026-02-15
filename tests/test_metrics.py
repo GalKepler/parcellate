@@ -9,17 +9,47 @@ from parcellate.metrics.volume import (
     _iqr_filter,
     _robust_filter,
     _z_score_filter,
+    abs_excess_kurtosis,
+    abs_skewness,
+    bimodality_coefficient,
+    cv,
+    dagostino_k2,
+    dagostino_p,
+    excess_tail_mass,
+    histogram_entropy,
     iqr_filtered_mean,
     iqr_filtered_std,
-    kurtosis,
+    is_bimodal,
+    is_heavy_tailed,
+    is_strongly_skewed,
+    left_tail_mass,
+    log_dagostino_k2,
     mad_median,
+    percentile_5,
+    percentile_25,
+    percentile_50,
+    percentile_75,
+    percentile_95,
+    prop_outliers_2sd,
+    prop_outliers_3sd,
+    prop_outliers_iqr,
+    qq_correlation,
+    qq_r_squared,
+    right_tail_mass,
+    robust_cv,
     robust_mean,
     robust_std,
+    shapiro_p,
+    shapiro_w,
     skewness,
+    tail_asymmetry,
     volsum,
     voxel_count,
     z_filtered_mean,
     z_filtered_std,
+)
+from parcellate.metrics.volume import (
+    excess_kurtosis as kurtosis,
 )
 
 
@@ -366,3 +396,286 @@ class TestKurtosis:
         values = np.array([1.0, 2.0, 3.0, 4.0])
         result = kurtosis(values)
         assert isinstance(result, float)
+
+
+class TestCVAndRobustCV:
+    """Tests for cv and robust_cv functions."""
+
+    def test_cv_normal(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = cv(values)
+        assert result == pytest.approx(np.std(values) / (np.mean(values) + 1e-10))
+
+    def test_cv_near_zero_mean(self) -> None:
+        """Test CV does not raise when mean is near zero."""
+        values = np.array([0.001, 0.002, 0.003])
+        result = cv(values)
+        assert isinstance(result, float)
+
+    def test_robust_cv_basic(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = robust_cv(values)
+        assert isinstance(result, float)
+        assert result >= 0.0
+
+    def test_robust_cv_near_zero_median(self) -> None:
+        values = np.array([0.0, 0.001, 0.002])
+        result = robust_cv(values)
+        assert isinstance(result, float)
+
+
+class TestQuartileDispersion:
+    """Tests for quartile_dispersion function (including empty-array guard)."""
+
+    def test_basic(self) -> None:
+        from parcellate.metrics.volume import quartile_dispersion
+
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = quartile_dispersion(values)
+        assert isinstance(result, float)
+        assert 0.0 <= result <= 1.0
+
+    def test_identical_values(self) -> None:
+        from parcellate.metrics.volume import quartile_dispersion
+
+        values = np.array([5.0, 5.0, 5.0, 5.0])
+        result = quartile_dispersion(values)
+        assert result == pytest.approx(0.0)
+
+    def test_empty_array_returns_nan(self) -> None:
+        """Empty array must not raise IndexError (NumPy ≥ 2.0 regression)."""
+        from parcellate.metrics.volume import quartile_dispersion
+
+        result = quartile_dispersion(np.array([]))
+        assert np.isnan(result)
+
+    def test_all_nan_returns_nan(self) -> None:
+        from parcellate.metrics.volume import quartile_dispersion
+
+        result = quartile_dispersion(np.array([np.nan, np.nan]))
+        assert np.isnan(result)
+
+
+class TestAbsSkewnessAndKurtosis:
+    """Tests for abs_skewness and abs_excess_kurtosis."""
+
+    def test_abs_skewness_is_nonnegative(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 100.0])
+        result = abs_skewness(values)
+        assert result >= 0.0
+
+    def test_abs_skewness_symmetric(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        assert abs_skewness(values) == pytest.approx(0.0, abs=0.1)
+
+    def test_abs_excess_kurtosis_is_nonnegative(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 100.0])
+        result = abs_excess_kurtosis(values)
+        assert result >= 0.0
+
+
+class TestBimodalityCoefficient:
+    """Tests for bimodality_coefficient."""
+
+    def test_small_sample_returns_nan(self) -> None:
+        values = np.array([1.0, 2.0, 3.0])  # n < 4
+        assert np.isnan(bimodality_coefficient(values))
+
+    def test_unimodal_below_threshold(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 200)
+        result = bimodality_coefficient(values)
+        assert isinstance(result, float)
+        # Normal distribution typically has BC < 0.555
+        assert result < 0.555
+
+    def test_high_skew_above_threshold(self) -> None:
+        # Highly skewed distribution gives BC > 0.555
+        values = np.concatenate([np.zeros(95), np.array([100.0] * 5)])
+        result = bimodality_coefficient(values)
+        assert result > 0.555
+
+
+class TestPropOutliers:
+    """Tests for prop_outliers_2sd, prop_outliers_3sd, and prop_outliers_iqr."""
+
+    def test_2sd_no_outliers(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 1000)
+        result = prop_outliers_2sd(values)
+        assert isinstance(result, float)
+        assert 0.0 <= result <= 1.0
+
+    def test_2sd_with_outliers(self) -> None:
+        values = np.concatenate([np.ones(90), np.array([100.0] * 10)])
+        result = prop_outliers_2sd(values)
+        assert result > 0.0
+
+    def test_3sd_no_outliers(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 1000)
+        result = prop_outliers_3sd(values)
+        assert 0.0 <= result <= 0.02
+
+    def test_iqr_no_outliers(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 1000)
+        result = prop_outliers_iqr(values)
+        assert 0.0 <= result <= 0.05
+
+    def test_iqr_with_outliers(self) -> None:
+        values = np.concatenate([np.ones(90), np.array([1000.0] * 10)])
+        result = prop_outliers_iqr(values)
+        assert result > 0.0
+
+    def test_iqr_empty_returns_nan(self) -> None:
+        """Empty array guard added in fix."""
+        result = prop_outliers_iqr(np.array([]))
+        assert np.isnan(result)
+
+
+class TestTailMetrics:
+    """Tests for left_tail_mass, right_tail_mass, tail_asymmetry, excess_tail_mass."""
+
+    def test_left_tail_mass_symmetric(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 10000)
+        result = left_tail_mass(values)
+        assert pytest.approx(result, abs=0.01) == 0.023
+
+    def test_right_tail_mass_symmetric(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 10000)
+        result = right_tail_mass(values)
+        assert pytest.approx(result, abs=0.01) == 0.023
+
+    def test_tail_asymmetry_symmetric(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 10000)
+        result = tail_asymmetry(values)
+        assert abs(result) < 0.02
+
+    def test_tail_asymmetry_right_skewed(self) -> None:
+        values = np.concatenate([np.ones(80), np.array([10.0] * 20)])
+        result = tail_asymmetry(values)
+        assert result > 0.0
+
+    def test_excess_tail_mass_near_normal(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 10000)
+        result = excess_tail_mass(values)
+        assert abs(result) < 0.02
+
+
+class TestNormalityTests:
+    """Tests for dagostino_k2/p, log_dagostino_k2, shapiro_w/p."""
+
+    def test_dagostino_small_sample_nan(self) -> None:
+        values = np.array([1.0, 2.0, 3.0])  # n < 20
+        assert np.isnan(dagostino_k2(values))
+        assert np.isnan(dagostino_p(values))
+        assert np.isnan(log_dagostino_k2(values))
+
+    def test_dagostino_normal_data(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 500)
+        k2 = dagostino_k2(values)
+        p = dagostino_p(values)
+        assert k2 > 0
+        assert 0.0 <= p <= 1.0
+
+    def test_log_dagostino_is_log_of_k2(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 100)
+        k2 = dagostino_k2(values)
+        log_k2 = log_dagostino_k2(values)
+        assert log_k2 == pytest.approx(np.log(k2 + 1e-10))
+
+    def test_shapiro_small_sample_nan(self) -> None:
+        values = np.array([1.0, 2.0])  # n < 3
+        assert np.isnan(shapiro_w(values))
+        assert np.isnan(shapiro_p(values))
+
+    def test_shapiro_normal_data(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 100)
+        w = shapiro_w(values)
+        p = shapiro_p(values)
+        assert 0.0 <= w <= 1.0
+        assert 0.0 <= p <= 1.0
+
+
+class TestQQMetrics:
+    """Tests for qq_correlation and qq_r_squared."""
+
+    def test_qq_correlation_normal(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 200)
+        r = qq_correlation(values)
+        assert r > 0.99  # Normal data should correlate very well
+
+    def test_qq_r_squared_is_square_of_correlation(self) -> None:
+        np.random.seed(42)
+        values = np.random.normal(0, 1, 200)
+        r = qq_correlation(values)
+        r2 = qq_r_squared(values)
+        assert r2 == pytest.approx(r**2)
+
+
+class TestHistogramEntropy:
+    """Tests for histogram_entropy."""
+
+    def test_uniform_higher_entropy_than_single_point(self) -> None:
+        # Single value has entropy = 0 (all mass in one bin)
+        single = np.array([5.0] * 100)
+        uniform = np.linspace(0, 10, 100)
+        assert histogram_entropy(uniform) > histogram_entropy(single)
+
+    def test_all_nan_returns_nan(self) -> None:
+        values = np.array([np.nan, np.nan])
+        assert np.isnan(histogram_entropy(values))
+
+
+class TestPercentiles:
+    """Tests for percentile_* functions."""
+
+    def test_percentile_5(self) -> None:
+        values = np.arange(1.0, 101.0)
+        assert percentile_5(values) == pytest.approx(np.nanpercentile(values, 5))
+
+    def test_percentile_25(self) -> None:
+        values = np.arange(1.0, 101.0)
+        assert percentile_25(values) == pytest.approx(25.75)
+
+    def test_percentile_50_is_median(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        assert percentile_50(values) == pytest.approx(3.0)
+
+    def test_percentile_75(self) -> None:
+        values = np.arange(1.0, 101.0)
+        assert percentile_75(values) == pytest.approx(np.nanpercentile(values, 75))
+
+    def test_percentile_95(self) -> None:
+        values = np.arange(1.0, 101.0)
+        assert percentile_95(values) == pytest.approx(np.nanpercentile(values, 95))
+
+
+class TestCategoricalFlags:
+    """Tests for is_strongly_skewed, is_heavy_tailed, is_bimodal."""
+
+    def test_is_strongly_skewed_true(self) -> None:
+        values = np.concatenate([np.ones(90), np.array([100.0] * 10)])
+        assert is_strongly_skewed(values)
+
+    def test_is_strongly_skewed_false(self) -> None:
+        values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        assert not is_strongly_skewed(values)
+
+    def test_is_heavy_tailed_true(self) -> None:
+        values = np.array([0.0] * 80 + [50.0] * 10 + [-50.0] * 10)
+        assert is_heavy_tailed(values)
+
+    def test_is_bimodal_false_for_normal(self) -> None:
+        np.random.seed(0)
+        values = np.random.normal(0, 1, 500)
+        assert not is_bimodal(values)
