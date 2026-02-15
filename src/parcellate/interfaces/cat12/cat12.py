@@ -30,6 +30,7 @@ from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import (
     _as_list,
+    _mask_label,
     _parse_log_level,
     _parse_mask,
     parse_atlases,
@@ -103,6 +104,7 @@ def _build_output_path(
     atlas: AtlasDefinition,
     scalar_map: ScalarMapDefinition,
     destination: Path,
+    mask: Path | str | None = None,
 ) -> Path:
     """Construct the output path for a parcellation result."""
 
@@ -123,6 +125,9 @@ def _build_output_path(
         entities.append(f"res-{atlas.resolution}")
     if scalar_map.tissue_type:
         entities.append(f"tissue-{scalar_map.tissue_type.value}")
+    label = _mask_label(mask)
+    if label:
+        entities.append(f"mask-{label}")
 
     filename = "_".join([*entities, "parc"]) + ".tsv"
     return output_dir / filename
@@ -136,6 +141,7 @@ def _write_output(result: ParcellationOutput, destination: Path, config: Cat12Co
         atlas=result.atlas,
         scalar_map=result.scalar_map,
         destination=destination,
+        mask=config.mask,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -172,6 +178,7 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
                 atlas=atlas,
                 scalar_map=scalar_map,
                 destination=config.output_dir,
+                mask=config.mask,
             )
             if not config.force and out_path.exists():
                 LOGGER.info("Reusing existing parcellation output at %s", out_path)

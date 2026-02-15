@@ -31,6 +31,7 @@ from parcellate.interfaces.qsirecon.models import (
 from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import (
     _as_list,
+    _mask_label,
     _parse_log_level,
     _parse_mask,
     parse_atlases,
@@ -90,6 +91,7 @@ def _build_output_path(
     atlas: AtlasDefinition,
     scalar_map: ScalarMapDefinition,
     destination: Path,
+    mask: Path | str | None = None,
 ) -> Path:
     """Construct the output path for a parcellation result."""
 
@@ -114,6 +116,9 @@ def _build_output_path(
     entities.append(f"param-{scalar_map.param}")
     if scalar_map.desc:
         entities.append(f"desc-{scalar_map.desc}")
+    label = _mask_label(mask)
+    if label:
+        entities.append(f"mask-{label}")
 
     filename = "_".join([*entities, "parc"]) + ".tsv"
     return output_dir / filename
@@ -127,6 +132,7 @@ def _write_output(result: ParcellationOutput, destination: Path, config: QSIReco
         atlas=result.atlas,
         scalar_map=result.scalar_map,
         destination=destination,
+        mask=config.mask,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -167,6 +173,7 @@ def _run_recon(
                     atlas=atlas,
                     scalar_map=scalar_map,
                     destination=config.output_dir,
+                    mask=config.mask,
                 )
                 if not config.force and out_path.exists():
                     LOGGER.info("Reusing existing parcellation output at %s", out_path)

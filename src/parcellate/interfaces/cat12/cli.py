@@ -265,7 +265,7 @@ def process_single_subject(
     for atlas, maps in plan.items():
         remaining = []
         for scalar_map in maps:
-            out_path = _build_output_path(context, atlas, scalar_map, config.output_dir)
+            out_path = _build_output_path(context, atlas, scalar_map, config.output_dir, mask=config.mask)
             if not config.force and out_path.exists():
                 LOGGER.debug("Reusing existing output: %s", out_path)
                 reused_outputs.append(out_path)

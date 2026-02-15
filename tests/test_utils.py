@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from parcellate.interfaces.utils import _as_list, _parse_log_level, _parse_mask, parse_atlases
+from parcellate.interfaces.utils import _as_list, _mask_label, _parse_log_level, _parse_mask, parse_atlases
 
 
 class TestParseLogLevel:
@@ -286,3 +286,22 @@ class TestParseMask:
         """Test that unrecognized names are treated as paths, not builtin strings."""
         result = _parse_mask("csf")
         assert isinstance(result, Path)
+
+
+class TestMaskLabel:
+    """Tests for _mask_label utility."""
+
+    def test_none_returns_none(self) -> None:
+        """Test that None produces no entity label."""
+        assert _mask_label(None) is None
+
+    def test_builtin_string_returns_name(self) -> None:
+        """Test that builtin name strings are returned as-is."""
+        assert _mask_label("gm") == "gm"
+        assert _mask_label("wm") == "wm"
+        assert _mask_label("brain") == "brain"
+
+    def test_path_returns_custom(self) -> None:
+        """Test that any Path produces the 'custom' label."""
+        assert _mask_label(Path("/some/mask.nii.gz")) == "custom"
+        assert _mask_label(Path("relative/mask.nii.gz")) == "custom"

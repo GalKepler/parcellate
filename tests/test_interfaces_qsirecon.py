@@ -199,6 +199,39 @@ def test_load_config_builtin_mask_from_args(tmp_path: Path) -> None:
     assert isinstance(config.mask, str)
 
 
+def test_build_output_path_builtin_mask_in_name(tmp_path: Path) -> None:
+    """Test that a builtin mask name appears as 'mask-gm' in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", param="fa")
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask="gm")
+
+    assert "mask-gm" in out_path.name
+
+
+def test_build_output_path_custom_mask_in_name(tmp_path: Path) -> None:
+    """Test that a Path mask produces 'mask-custom' in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", param="fa")
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask=tmp_path / "mask.nii.gz")
+
+    assert "mask-custom" in out_path.name
+
+
+def test_build_output_path_no_mask_not_in_name(tmp_path: Path) -> None:
+    """Test that no mask means no mask entity in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", param="fa")
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask=None)
+
+    assert "mask-" not in out_path.name
+
+
 def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     context = SubjectContext(subject_id="01", session_id="02")
     atlas = AtlasDefinition(

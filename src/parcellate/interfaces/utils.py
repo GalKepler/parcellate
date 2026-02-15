@@ -18,6 +18,29 @@ logger = logging.getLogger(__name__)
 _BUILTIN_MASK_NAMES: frozenset[str] = frozenset({"gm", "wm", "brain"})
 
 
+def _mask_label(mask: Path | str | None) -> str | None:
+    """Return the BIDS mask entity label for a given mask value.
+
+    Parameters
+    ----------
+    mask
+        Builtin mask name string (e.g. ``"gm"``), a filesystem :class:`~pathlib.Path`,
+        or ``None``.
+
+    Returns
+    -------
+    str | None
+        * The builtin name (``"gm"``, ``"wm"``, ``"brain"``) if *mask* is one of those strings.
+        * ``"custom"`` if *mask* is a :class:`~pathlib.Path`.
+        * ``None`` if *mask* is ``None`` (no mask entity in filename).
+    """
+    if mask is None:
+        return None
+    if isinstance(mask, str):
+        return mask
+    return "custom"
+
+
 def _parse_mask(value: str | None) -> Path | str | None:
     """Return the mask as a resolved Path or, for builtin names, as the original string.
 

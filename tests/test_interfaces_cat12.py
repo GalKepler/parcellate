@@ -615,6 +615,39 @@ def test_build_output_path_without_session(tmp_path: Path) -> None:
     assert out_path.parent == expected_dir
 
 
+def test_build_output_path_builtin_mask_in_name(tmp_path: Path) -> None:
+    """Test that a builtin mask name appears as 'mask-gm' in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", tissue_type=TissueType.GM)
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask="gm")
+
+    assert "mask-gm" in out_path.name
+
+
+def test_build_output_path_custom_mask_in_name(tmp_path: Path) -> None:
+    """Test that a Path mask produces 'mask-custom' in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", tissue_type=TissueType.GM)
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask=tmp_path / "mask.nii.gz")
+
+    assert "mask-custom" in out_path.name
+
+
+def test_build_output_path_no_mask_not_in_name(tmp_path: Path) -> None:
+    """Test that no mask means no mask entity in the filename."""
+    context = SubjectContext(subject_id="01")
+    atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
+    scalar = ScalarMapDefinition(name="map", nifti_path=tmp_path / "map.nii.gz", tissue_type=TissueType.GM)
+
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask=None)
+
+    assert "mask-" not in out_path.name
+
+
 def test_write_output_creates_file(tmp_path: Path) -> None:
     """Test _write_output creates the output TSV and JSON sidecar."""
     context = SubjectContext(subject_id="01")
@@ -798,7 +831,9 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
     )
     recon = type("Recon", (), {"context": context, "atlases": [atlas], "scalar_maps": [scalar]})()
 
-    out_path = _build_output_path(context, atlas, scalar, tmp_path)
+    # Cat12Config defaults mask="gm"; pre-create the file at the mask-aware path
+    config = Cat12Config(input_root=tmp_path, output_dir=tmp_path, atlases=[atlas], force=False)
+    out_path = _build_output_path(context, atlas, scalar, tmp_path, mask=config.mask)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     existing = pd.DataFrame({"index": [1], "value": [2.0]})
     existing.to_csv(out_path, sep="\t", index=False)
@@ -815,8 +850,6 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
         "parcellate.interfaces.cat12.cat12.run_parcellation_workflow",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Should not run when outputs exist")),
     )
-
-    config = Cat12Config(input_root=tmp_path, output_dir=tmp_path, atlases=[atlas], force=False)
 
     outputs = run_parcellations(config)
 
