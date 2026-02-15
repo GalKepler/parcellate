@@ -154,7 +154,22 @@ space = "MNI152NLin2009cAsym"
         config_file.write_text(config_content)
 
         # Run first time
-        config = load_cat12_config(config_file)
+        import argparse
+
+        args = argparse.Namespace(
+            config=config_file,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_cat12_config(args)
         outputs1 = run_cat12_parcellations(config)
         assert len(outputs1) > 0
 
@@ -202,7 +217,22 @@ space = "MNI152NLin2009cAsym"
         config_file.write_text(config_content)
 
         # Run first time
-        config = load_cat12_config(config_file)
+        import argparse
+
+        args = argparse.Namespace(
+            config=config_file,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_cat12_config(args)
         outputs1 = run_cat12_parcellations(config)
         output_file = outputs1[0]
         original_mtime = output_file.stat().st_mtime
