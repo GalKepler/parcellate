@@ -148,6 +148,57 @@ def test_load_config_reads_toml(tmp_path: Path) -> None:
     assert config.log_level == logging.DEBUG
 
 
+def test_load_config_builtin_mask_kept_as_string(tmp_path: Path) -> None:
+    """Test that builtin mask names ('gm', 'wm', 'brain') are kept as plain strings."""
+    for builtin_name in ("gm", "wm", "brain"):
+        cfg_path = tmp_path / f"qsirecon_{builtin_name}.toml"
+        cfg_path.write_text(
+            "\n".join([
+                'input_root = "/data"',
+                'output_dir = "/out"',
+                f'mask = "{builtin_name}"',
+            ])
+        )
+        args = argparse.Namespace(
+            config=cfg_path,
+            input_root=None,
+            output_dir=None,
+            atlas_config=None,
+            subjects=None,
+            sessions=None,
+            mask=None,
+            force=False,
+            log_level=None,
+            n_jobs=None,
+            n_procs=None,
+        )
+        config = load_config(args)
+        assert config.mask == builtin_name, f"Expected mask='{builtin_name}' as str, got {config.mask!r}"
+        assert isinstance(config.mask, str), f"Expected str for builtin mask, got {type(config.mask)}"
+
+
+def test_load_config_builtin_mask_from_args(tmp_path: Path) -> None:
+    """Test that builtin mask name passed via CLI args is kept as plain string."""
+    cfg_path = tmp_path / "qsirecon.toml"
+    cfg_path.write_text("\n".join(['input_root = "/data"', 'output_dir = "/out"']))
+    args = argparse.Namespace(
+        config=cfg_path,
+        input_root=None,
+        output_dir=None,
+        atlas_config=None,
+        subjects=None,
+        sessions=None,
+        mask="wm",
+        force=False,
+        log_level=None,
+        n_jobs=None,
+        n_procs=None,
+    )
+    config = load_config(args)
+    assert config.mask == "wm"
+    assert isinstance(config.mask, str)
+
+
 def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     context = SubjectContext(subject_id="01", session_id="02")
     atlas = AtlasDefinition(
