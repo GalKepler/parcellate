@@ -22,11 +22,11 @@ import pandas as pd
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+from parcellate.interfaces.cat12.cat12 import _build_output_path, _write_output
 from parcellate.interfaces.cat12.loader import discover_scalar_maps
 from parcellate.interfaces.cat12.models import (
     AtlasDefinition,
     Cat12Config,
-    ParcellationOutput,
     ReconInput,
     SubjectContext,
 )
@@ -218,48 +218,6 @@ def config_from_env() -> Cat12Config:
     )
 
 
-def _build_output_path(
-    context: SubjectContext,
-    atlas: AtlasDefinition,
-    scalar_map,
-    destination: Path,
-) -> Path:
-    """Construct the output path for a parcellation result."""
-    base = destination / "cat12"
-
-    subject_dir = base / f"sub-{context.subject_id}"
-    if context.session_id:
-        subject_dir = subject_dir / f"ses-{context.session_id}"
-
-    output_dir = subject_dir / "anat" / f"atlas-{atlas.name}"
-
-    entities: list[str] = [context.label]
-    space = atlas.space or scalar_map.space
-    entities.append(f"atlas-{atlas.name}")
-    if space:
-        entities.append(f"space-{space}")
-    if atlas.resolution:
-        entities.append(f"res-{atlas.resolution}")
-    if scalar_map.tissue_type:
-        entities.append(f"tissue-{scalar_map.tissue_type.value}")
-
-    filename = "_".join([*entities, "parc"]) + ".tsv"
-    return output_dir / filename
-
-
-def _write_output(result: ParcellationOutput, destination: Path) -> Path:
-    """Write a parcellation output to disk."""
-    out_path = _build_output_path(
-        context=result.context,
-        atlas=result.atlas,
-        scalar_map=result.scalar_map,
-        destination=destination,
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    result.stats_table.to_csv(out_path, sep="\t", index=False)
-    return out_path
-
-
 def process_single_subject(
     subject: SubjectSession,
     config: Cat12Config,
@@ -320,7 +278,7 @@ def process_single_subject(
     if pending_plan:
         results = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in results:
-            out_path = _write_output(result, config.output_dir)
+            out_path = _write_output(result, config.output_dir, config)
             outputs.append(out_path)
             LOGGER.info("Wrote: %s", out_path)
 

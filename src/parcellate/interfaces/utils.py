@@ -5,8 +5,10 @@ This module provides shared utility functions for the interfaces.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from parcellate.interfaces.models import AtlasDefinition
@@ -63,6 +65,76 @@ def _as_list(value: Iterable[str] | str | None) -> list[str] | None:
     if isinstance(value, str):
         return [value]
     return list(value)
+
+
+def write_parcellation_sidecar(
+    tsv_path: Path,
+    original_file: Path,
+    atlas_name: str,
+    atlas_image: Path,
+    atlas_lut: Path | None,
+    mask: Path | str | None,
+    space: str | None = None,
+    resampling_target: str | None = None,
+    background_label: int = 0,
+) -> Path:
+    """Write a JSON sidecar file alongside a parcellation TSV.
+
+    The sidecar captures provenance: which scalar image was parcellated,
+    which atlas was used, and what processing parameters were applied.
+
+    Parameters
+    ----------
+    tsv_path
+        Path to the parcellation TSV file. The JSON will share its stem.
+    original_file
+        Path to the original scalar image that was parcellated.
+    atlas_name
+        Name of the atlas used.
+    atlas_image
+        Path to the atlas NIfTI file.
+    atlas_lut
+        Path to the atlas lookup table, or None.
+    mask
+        Path to the mask file, the string name of a builtin mask (e.g. "gm"), or None.
+    space
+        The atlas/data space identifier (e.g. "MNI152NLin2009cAsym").
+    resampling_target
+        The resampling strategy used (e.g. "data", "labels").
+    background_label
+        The integer label treated as background.
+
+    Returns
+    -------
+    Path
+        Path to the written JSON sidecar file.
+    """
+    try:
+        from importlib.metadata import version as pkg_version
+
+        software_version = pkg_version("parcellate")
+    except Exception:
+        software_version = "unknown"
+
+    sidecar: dict = {
+        "original_file": str(original_file),
+        "mask": str(mask) if mask is not None else None,
+        "parcellation_scheme": {
+            "name": atlas_name,
+            "image": str(atlas_image),
+            "lut": str(atlas_lut) if atlas_lut is not None else None,
+        },
+        "space": space,
+        "resampling_target": resampling_target,
+        "background_label": background_label,
+        "software_version": software_version,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+    json_path = tsv_path.with_suffix(".json")
+    json_path.write_text(json.dumps(sidecar, indent=2) + "\n")
+    logger.debug("Wrote parcellation sidecar to %s", json_path)
+    return json_path
 
 
 def parse_atlases(

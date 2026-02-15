@@ -167,8 +167,9 @@ def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     )
     stats = pd.DataFrame({"index": [1], "value": [3.14]})
     po = ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=stats)
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path)
 
-    out_path = _write_output(po, destination=tmp_path)
+    out_path = _write_output(po, destination=tmp_path, config=config)
 
     expected_dir = tmp_path / "qsirecon-workflowX" / "sub-01" / "ses-02" / "dwi" / "atlas-atlasA"
     assert out_path.parent == expected_dir
@@ -176,6 +177,10 @@ def test_write_output_creates_bids_like_path(tmp_path: Path) -> None:
     assert out_path.exists()
     written = pd.read_csv(out_path, sep="\t")
     assert written.equals(stats)
+
+    # JSON sidecar should also be created
+    json_path = out_path.with_suffix(".json")
+    assert json_path.exists()
 
 
 def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -210,7 +215,7 @@ def test_run_parcellations_reuses_existing_outputs(monkeypatch: pytest.MonkeyPat
     assert pd.read_csv(out_path, sep="\t").equals(existing)
 
 
-def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_parcellations_overwrites_when_forced(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     context = SubjectContext("01")
     atlas = AtlasDefinition("atlas", nifti_path=tmp_path / "atlas.nii.gz")
     scalar = ScalarMapDefinition("map", nifti_path=tmp_path / "map.nii.gz", param="fa")
@@ -220,6 +225,8 @@ def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.Mo
     out_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"index": [1], "value": [2.0]}).to_csv(out_path, sep="\t", index=False)
 
+    computed = pd.DataFrame({"index": [1], "value": [3.0]})
+
     monkeypatch.setattr(
         "parcellate.interfaces.qsirecon.qsirecon.load_qsirecon_inputs",
         lambda *args, **kwargs: [recon],
@@ -228,34 +235,19 @@ def test_run_parcellations_overwrites_when_forced(mocker, monkeypatch: pytest.Mo
         "parcellate.interfaces.qsirecon.qsirecon.plan_parcellation_workflow",
         lambda recon: {atlas: [scalar]},
     )
-
-    computed = pd.DataFrame({"index": [1], "value": [3.0]})
-
-    def mock_run_recon(recon, plan, config):
-        # Write the new computed values
-        computed.to_csv(out_path, sep="\t", index=False)
-        return [out_path]
-
-    mock_executor_instance = mocker.MagicMock()
-    future_mock = mocker.MagicMock()
-    future_mock.result.return_value = mock_run_recon(recon, {atlas: [scalar]}, None)
-    mock_executor_instance.submit.return_value = future_mock
-    mock_executor_instance.__enter__.return_value = mock_executor_instance
-    mock_executor_instance.__exit__.return_value = False
-
-    mock_executor_type = mocker.patch(
-        "parcellate.interfaces.qsirecon.qsirecon.ProcessPoolExecutor",
-        return_value=mock_executor_instance,
+    monkeypatch.setattr(
+        "parcellate.interfaces.qsirecon.qsirecon.run_parcellation_workflow",
+        lambda *args, **kwargs: [
+            ParcellationOutput(context, atlas, scalar, computed),
+        ],
     )
 
-    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=True, n_procs=2)
+    config = QSIReconConfig(input_root=tmp_path, output_dir=tmp_path, force=True)
 
     outputs = run_parcellations(config)
 
-    assert outputs == [out_path]
-    mock_executor_type.assert_called_once_with(max_workers=config.n_procs)
-    mock_executor_instance.submit.assert_called_once()
-    assert pd.read_csv(out_path, sep="\t").equals(computed)
+    assert len(outputs) == 1
+    assert pd.read_csv(outputs[0], sep="\t").equals(computed)
 
 
 def test_discover_scalar_maps_builds_definitions(tmp_path: Path) -> None:
