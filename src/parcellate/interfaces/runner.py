@@ -3,10 +3,11 @@
 This module provides functions for running parcellation workflows.
 """
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Mapping
-from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Union
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 class ScalarMapSpaceMismatchError(ValueError):
     """Raised when scalar maps have inconsistent spaces."""
 
-    def __init__(self, spaces: set[Union[str, None]]):
+    def __init__(self, spaces: set[str | None]):
         """Initialize the error."""
         super().__init__(f"Scalar maps have inconsistent spaces: {spaces}")
 
@@ -52,7 +53,7 @@ def _parcellate_scalar_map(
     atlas: AtlasDefinition,
     scalar_map,
     parcellator: VolumetricParcellator,
-) -> Optional[ParcellationOutput]:
+) -> ParcellationOutput | None:
     """Parcellate a single scalar map."""
     logger.debug("Parcellating %s with atlas %s", scalar_map.name, atlas.name)
     try:
@@ -100,51 +101,57 @@ def run_parcellation_workflow(
         List of parcellation outputs generated.
     """
     logger.info("Running parcellation workflow for %s", recon)
-    jobs: list[ParcellationOutput] = []
 
     num_jobs = sum(len(scalar_maps) for scalar_maps in plan.values())
     logger.info("Found %d parcellation jobs to run.", num_jobs)
 
+    # Phase 1 (sequential): validate spaces and initialise one parcellator per atlas.
+    # Fitting is I/O-heavy and mutates state, so it must happen before the thread pool.
+    atlas_parcellators: dict[AtlasDefinition, tuple[VolumetricParcellator, list]] = {}
+    for atlas, scalar_maps in plan.items():
+        if not scalar_maps:
+            logger.debug("No scalar maps to parcellate for atlas %s", atlas.name)
+            continue
+
+        try:
+            _validate_scalar_map_spaces(scalar_maps)
+        except ScalarMapSpaceMismatchError as e:
+            logger.warning("Skipping atlas %s due to space mismatch: %s", atlas.name, e)
+            continue
+
+        logger.info("Initializing parcellator for atlas %s", atlas.name)
+        try:
+            vp = VolumetricParcellator(
+                atlas_img=atlas.nifti_path,
+                lut=atlas.lut,
+                mask=config.mask,
+                background_label=config.background_label,
+                resampling_target=config.resampling_target,
+            )
+            vp.fit(scalar_img=scalar_maps[0].nifti_path)
+        except Exception:
+            logger.exception("Failed to initialize parcellator for atlas %s", atlas.name)
+            continue
+
+        atlas_parcellators[atlas] = (vp, scalar_maps)
+
+    if not atlas_parcellators:
+        logger.info("Finished parcellation workflow for %s", recon)
+        return []
+
+    # Phase 2 (parallel): submit all transform jobs across ALL atlases in one pool.
+    # This allows scalar maps from different atlases to execute concurrently.
+    jobs: list[ParcellationOutput] = []
     with ThreadPoolExecutor(max_workers=config.n_jobs) as executor:
-        for atlas, scalar_maps in plan.items():
-            if not scalar_maps:
-                logger.debug("No scalar maps to parcellate for atlas %s", atlas.name)
-                continue
-
-            # Validate that all scalar maps share the same space
-            try:
-                _validate_scalar_map_spaces(scalar_maps)
-            except ScalarMapSpaceMismatchError as e:
-                logger.warning(
-                    "Skipping atlas %s due to space mismatch: %s",
-                    atlas.name,
-                    e,
-                )
-                continue
-
-            logger.info("Initializing parcellator for atlas %s", atlas.name)
-            try:
-                vp = VolumetricParcellator(
-                    atlas_img=atlas.nifti_path,
-                    lut=atlas.lut,
-                    mask=config.mask,
-                    background_label=config.background_label,
-                    resampling_target=config.resampling_target,
-                )
-                vp.fit(scalar_img=scalar_maps[0].nifti_path)
-            except Exception:
-                logger.exception(
-                    "Failed to initialize parcellator for atlas %s",
-                    atlas.name,
-                )
-                continue
-
-            # Submit jobs to the executor
-            futures = [executor.submit(_parcellate_scalar_map, recon, atlas, sm, vp) for sm in scalar_maps]
-            for future in futures:
-                result = future.result()
-                if result:
-                    jobs.append(result)
+        all_futures = {
+            executor.submit(_parcellate_scalar_map, recon, atlas, sm, vp): (atlas, sm)
+            for atlas, (vp, scalar_maps) in atlas_parcellators.items()
+            for sm in scalar_maps
+        }
+        for future in as_completed(all_futures):
+            result = future.result()
+            if result:
+                jobs.append(result)
 
     logger.info("Finished parcellation workflow for %s", recon)
     return jobs
