@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -266,3 +267,81 @@ def _extract_desc(nii_path: Path) -> str | None:
     # CAT12 files don't typically have BIDS-style desc entity
     # Return the full stem as description
     return stem
+
+
+def discover_cat12_xml(
+    root: Path,
+    subject: str,
+    session: str | None,
+) -> list[Path]:
+    """Discover CAT12 XML report files for a subject/session.
+
+    Parameters
+    ----------
+    root
+        Root directory of CAT12 derivatives.
+    subject
+        Subject identifier (without 'sub-' prefix).
+    session
+        Session identifier (without 'ses-' prefix), or None.
+
+    Returns
+    -------
+    list[Path]
+        Sorted list of discovered ``cat_*.xml`` file paths.
+    """
+    search_path = _build_search_path(root, subject, session)
+    if not search_path.exists():
+        logger.debug("Search path does not exist: %s", search_path)
+        return []
+    return sorted(search_path.glob("cat_*.xml"))
+
+
+def extract_tiv_from_xml(xml_path: Path) -> float | None:
+    """Extract TIV (Total Intracranial Volume) from a CAT12 XML report.
+
+    Parses the ``<subjectmeasures><vol_TIV>`` element to obtain the TIV value
+    in mL.  The XML may contain multiple ``vol_TIV`` elements; some hold
+    descriptive text while others hold the numeric value.  The first parseable
+    float value is returned.
+
+    Parameters
+    ----------
+    xml_path
+        Path to the CAT12 XML report (e.g., ``cat_*.xml``).
+
+    Returns
+    -------
+    float | None
+        TIV in mL, or None if the value could not be extracted.
+    """
+    try:
+        tree = ET.parse(xml_path)  # noqa: S314
+        root = tree.getroot()
+
+        # Prefer vol_TIV nested inside subjectmeasures
+        for subj_measures in root.iter("subjectmeasures"):
+            vol_tiv = subj_measures.find("vol_TIV")
+            if vol_tiv is not None and vol_tiv.text:
+                try:
+                    return float(vol_tiv.text.strip())
+                except ValueError:
+                    continue
+
+        # Fallback: search the entire tree
+        for vol_tiv in root.iter("vol_TIV"):
+            if vol_tiv.text:
+                try:
+                    return float(vol_tiv.text.strip())
+                except ValueError:
+                    continue
+
+    except ET.ParseError:
+        logger.warning("Failed to parse XML %s", xml_path, exc_info=True)
+        return None
+    except Exception:
+        logger.warning("Unexpected error extracting TIV from %s", xml_path, exc_info=True)
+        return None
+
+    logger.debug("No numeric vol_TIV found in XML: %s", xml_path)
+    return None
