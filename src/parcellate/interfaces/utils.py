@@ -15,6 +15,31 @@ from parcellate.interfaces.models import AtlasDefinition
 
 logger = logging.getLogger(__name__)
 
+_BUILTIN_MASK_NAMES: frozenset[str] = frozenset({"gm", "wm", "brain"})
+
+
+def _parse_mask(value: str | None) -> Path | str | None:
+    """Return the mask as a resolved Path or, for builtin names, as the original string.
+
+    Parameters
+    ----------
+    value
+        The mask value from configuration — either a builtin name (``"gm"``,
+        ``"wm"``, ``"brain"``) or a filesystem path.
+
+    Returns
+    -------
+    Path | str | None
+        * ``None`` if *value* is falsy.
+        * The original string unchanged if *value* is a builtin mask name.
+        * A resolved :class:`~pathlib.Path` otherwise.
+    """
+    if not value:
+        return None
+    if value in _BUILTIN_MASK_NAMES:
+        return value
+    return Path(value).expanduser().resolve()
+
 
 def _parse_log_level(value: str | int | None) -> int:
     """Return a logging level from common string/int inputs.

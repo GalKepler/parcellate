@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
+from parcellate.interfaces.utils import _as_list, _parse_log_level, _parse_mask, parse_atlases
 
 
 class TestParseLogLevel:
@@ -232,3 +232,57 @@ class TestParseAtlases:
         atlases = parse_atlases(config)
 
         assert atlases == []
+
+
+class TestParseMask:
+    """Tests for _parse_mask utility."""
+
+    def test_none_returns_none(self) -> None:
+        """Test that None returns None."""
+        assert _parse_mask(None) is None
+
+    def test_empty_string_returns_none(self) -> None:
+        """Test that empty string returns None."""
+        assert _parse_mask("") is None
+
+    def test_gm_returns_string(self) -> None:
+        """Test that 'gm' builtin name is returned as a plain string."""
+        result = _parse_mask("gm")
+        assert result == "gm"
+        assert isinstance(result, str)
+
+    def test_wm_returns_string(self) -> None:
+        """Test that 'wm' builtin name is returned as a plain string."""
+        result = _parse_mask("wm")
+        assert result == "wm"
+        assert isinstance(result, str)
+
+    def test_brain_returns_string(self) -> None:
+        """Test that 'brain' builtin name is returned as a plain string."""
+        result = _parse_mask("brain")
+        assert result == "brain"
+        assert isinstance(result, str)
+
+    def test_path_string_returns_resolved_path(self) -> None:
+        """Test that a filesystem path string is returned as a resolved Path."""
+        result = _parse_mask("/var/mask.nii.gz")
+        assert isinstance(result, Path)
+        assert result == Path("/var/mask.nii.gz").resolve()
+
+    def test_relative_path_is_resolved(self) -> None:
+        """Test that relative paths are resolved to absolute."""
+        result = _parse_mask("some/relative/mask.nii.gz")
+        assert isinstance(result, Path)
+        assert result.is_absolute()
+
+    def test_tilde_path_is_expanded(self) -> None:
+        """Test that tilde is expanded in path strings."""
+        result = _parse_mask("~/mask.nii.gz")
+        assert isinstance(result, Path)
+        assert "~" not in str(result)
+        assert result.is_absolute()
+
+    def test_non_builtin_name_treated_as_path(self) -> None:
+        """Test that unrecognized names are treated as paths, not builtin strings."""
+        result = _parse_mask("csf")
+        assert isinstance(result, Path)

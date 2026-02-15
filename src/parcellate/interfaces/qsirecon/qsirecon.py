@@ -29,7 +29,13 @@ from parcellate.interfaces.qsirecon.models import (
     SubjectContext,
 )
 from parcellate.interfaces.runner import run_parcellation_workflow
-from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases, write_parcellation_sidecar
+from parcellate.interfaces.utils import (
+    _as_list,
+    _parse_log_level,
+    _parse_mask,
+    parse_atlases,
+    write_parcellation_sidecar,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,7 +65,7 @@ def load_config(args: argparse.Namespace) -> QSIReconConfig:
     atlases = parse_atlases(atlas_configs)  # No default space for QSIRecon
 
     mask_value = args.mask or data.get("mask")
-    mask = Path(mask_value).expanduser().resolve() if mask_value else None
+    mask = _parse_mask(mask_value)
     force = args.force or bool(data.get("force", False))
     log_level = _parse_log_level(args.log_level or data.get("log_level"))
     n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
