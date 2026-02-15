@@ -1,0 +1,9 @@
+{
+  "original_file": "<path_to_original_scalar_image.nii.gz>",
+  "mask": "<path_to_mask_image.nii.gz | None>",
+  "parcellation_scheme": {
+    "name": "atlas_name",
+    "image": "<path_to_parcellation_image.nii.gz>",
+    "lut": "<path_to_lut_file.tsv>"
+  }
+}

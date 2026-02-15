@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 try:  # Python 3.11+
@@ -29,7 +29,7 @@ from parcellate.interfaces.qsirecon.models import (
     SubjectContext,
 )
 from parcellate.interfaces.runner import run_parcellation_workflow
-from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
+from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases, write_parcellation_sidecar
 
 LOGGER = logging.getLogger(__name__)
 
@@ -113,8 +113,8 @@ def _build_output_path(
     return output_dir / filename
 
 
-def _write_output(result: ParcellationOutput, destination: Path) -> Path:
-    """Write a parcellation output to disk using a QSIRecon-like layout."""
+def _write_output(result: ParcellationOutput, destination: Path, config: QSIReconConfig) -> Path:
+    """Write a parcellation output and JSON sidecar to disk using a QSIRecon-like layout."""
 
     out_path = _build_output_path(
         context=result.context,
@@ -126,6 +126,19 @@ def _write_output(result: ParcellationOutput, destination: Path) -> Path:
 
     result.stats_table.to_csv(out_path, sep="\t", index=False)
     LOGGER.debug("Wrote parcellation output to %s", out_path)
+
+    lut_path = result.atlas.lut if isinstance(result.atlas.lut, Path) else None
+    write_parcellation_sidecar(
+        tsv_path=out_path,
+        original_file=result.scalar_map.nifti_path,
+        atlas_name=result.atlas.name,
+        atlas_image=result.atlas.nifti_path,
+        atlas_lut=lut_path,
+        mask=config.mask,
+        space=result.atlas.space or result.scalar_map.space,
+        resampling_target=config.resampling_target,
+        background_label=config.background_label,
+    )
     return out_path
 
 
@@ -168,7 +181,7 @@ def _run_recon(
     if pending_plan:
         jobs = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in jobs:
-            outputs.append(_write_output(result, destination=config.output_dir))
+            outputs.append(_write_output(result, destination=config.output_dir, config=config))
 
     outputs.extend(reused_outputs)
     return outputs
@@ -191,20 +204,35 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
         LOGGER.warning("No recon inputs discovered. Nothing to do.")
         return []
 
+    outputs: list[list[Path]] = []
     if config.n_procs > 1:
         LOGGER.info("Running parcellation across subjects with %d processes", config.n_procs)
         with ProcessPoolExecutor(max_workers=config.n_procs) as executor:
-            futures = [
-                executor.submit(
-                    _run_recon,
-                    recon,
-                    plan_parcellation_workflow(recon),
-                    config,
-                )
+            future_to_recon = {
+                executor.submit(_run_recon, recon, plan_parcellation_workflow(recon), config): recon
                 for recon in recon_inputs
-            ]
-            LOGGER.info("Submitted %d parcellation jobs to the executor", len(futures))
-            outputs = [future.result() for future in futures]
+            }
+            LOGGER.info("Submitted %d parcellation jobs to the executor", len(future_to_recon))
+            total = len(future_to_recon)
+            for i, future in enumerate(as_completed(future_to_recon), start=1):
+                recon = future_to_recon[future]
+                try:
+                    result = future.result()
+                    outputs.append(result)
+                    LOGGER.info(
+                        "[%d/%d] Finished parcellation for %s (%d outputs)",
+                        i,
+                        total,
+                        recon.context.label,
+                        len(result),
+                    )
+                except Exception:
+                    LOGGER.exception(
+                        "[%d/%d] Failed parcellation for %s",
+                        i,
+                        total,
+                        recon.context.label,
+                    )
     else:
         outputs = [_run_recon(recon, plan_parcellation_workflow(recon), config) for recon in recon_inputs]
 

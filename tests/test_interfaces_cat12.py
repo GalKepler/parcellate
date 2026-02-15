@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -54,7 +55,7 @@ from parcellate.interfaces.runner import (
 from parcellate.interfaces.runner import (
     run_parcellation_workflow as run_cat12_parcellation_workflow,
 )
-from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases
+from parcellate.interfaces.utils import _as_list, _parse_log_level, parse_atlases, write_parcellation_sidecar
 
 # --- Model Tests ---
 
@@ -560,7 +561,7 @@ def test_build_output_path_without_session(tmp_path: Path) -> None:
 
 
 def test_write_output_creates_file(tmp_path: Path) -> None:
-    """Test _write_output creates the output file."""
+    """Test _write_output creates the output TSV and JSON sidecar."""
     context = SubjectContext(subject_id="01")
     atlas = AtlasDefinition(name="atlasA", nifti_path=tmp_path / "atlas.nii.gz", space="MNI")
     scalar = ScalarMapDefinition(
@@ -570,12 +571,112 @@ def test_write_output_creates_file(tmp_path: Path) -> None:
     )
     stats = pd.DataFrame({"index": [1], "value": [3.14]})
     po = ParcellationOutput(context=context, atlas=atlas, scalar_map=scalar, stats_table=stats)
+    config = Cat12Config(input_root=tmp_path, output_dir=tmp_path)
 
-    out_path = _write_output(po, destination=tmp_path)
+    out_path = _write_output(po, destination=tmp_path, config=config)
 
     assert out_path.exists()
     written = pd.read_csv(out_path, sep="\t")
     assert written.equals(stats)
+
+    # JSON sidecar should also exist
+    json_path = out_path.with_suffix(".json")
+    assert json_path.exists()
+
+
+# --- Sidecar Tests ---
+
+
+def test_write_parcellation_sidecar_creates_json(tmp_path: Path) -> None:
+    """Test write_parcellation_sidecar creates a valid JSON file."""
+    tsv_path = tmp_path / "sub-01_atlas-test_parc.tsv"
+    tsv_path.touch()
+
+    json_path = write_parcellation_sidecar(
+        tsv_path=tsv_path,
+        original_file=tmp_path / "mwp1sub01.nii.gz",
+        atlas_name="test_atlas",
+        atlas_image=tmp_path / "atlas.nii.gz",
+        atlas_lut=tmp_path / "atlas.tsv",
+        mask=None,
+        space="MNI152NLin2009cAsym",
+        resampling_target="data",
+        background_label=0,
+    )
+
+    assert json_path.exists()
+    assert json_path.suffix == ".json"
+    assert json_path.stem == tsv_path.stem
+
+
+def test_write_parcellation_sidecar_content(tmp_path: Path) -> None:
+    """Test sidecar JSON contains all expected fields."""
+    tsv_path = tmp_path / "sub-01_atlas-test_parc.tsv"
+    tsv_path.touch()
+    original = tmp_path / "mwp1sub01.nii.gz"
+    atlas_img = tmp_path / "atlas.nii.gz"
+    atlas_lut = tmp_path / "atlas.tsv"
+
+    write_parcellation_sidecar(
+        tsv_path=tsv_path,
+        original_file=original,
+        atlas_name="my_atlas",
+        atlas_image=atlas_img,
+        atlas_lut=atlas_lut,
+        mask=Path("/path/to/mask.nii.gz"),
+        space="MNI152NLin2009cAsym",
+        resampling_target="data",
+        background_label=0,
+    )
+
+    data = json.loads(tsv_path.with_suffix(".json").read_text())
+    assert data["original_file"] == str(original)
+    assert data["mask"] == "/path/to/mask.nii.gz"
+    assert data["parcellation_scheme"]["name"] == "my_atlas"
+    assert data["parcellation_scheme"]["image"] == str(atlas_img)
+    assert data["parcellation_scheme"]["lut"] == str(atlas_lut)
+    assert data["space"] == "MNI152NLin2009cAsym"
+    assert data["resampling_target"] == "data"
+    assert data["background_label"] == 0
+    assert "software_version" in data
+    assert "timestamp" in data
+
+
+def test_write_parcellation_sidecar_null_mask(tmp_path: Path) -> None:
+    """Test sidecar JSON handles None mask correctly."""
+    tsv_path = tmp_path / "sub-01_parc.tsv"
+    tsv_path.touch()
+
+    write_parcellation_sidecar(
+        tsv_path=tsv_path,
+        original_file=tmp_path / "scalar.nii.gz",
+        atlas_name="atlas",
+        atlas_image=tmp_path / "atlas.nii.gz",
+        atlas_lut=None,
+        mask=None,
+    )
+
+    data = json.loads(tsv_path.with_suffix(".json").read_text())
+    assert data["mask"] is None
+    assert data["parcellation_scheme"]["lut"] is None
+
+
+def test_write_parcellation_sidecar_builtin_mask_string(tmp_path: Path) -> None:
+    """Test sidecar JSON preserves builtin mask name string."""
+    tsv_path = tmp_path / "sub-01_parc.tsv"
+    tsv_path.touch()
+
+    write_parcellation_sidecar(
+        tsv_path=tsv_path,
+        original_file=tmp_path / "scalar.nii.gz",
+        atlas_name="atlas",
+        atlas_image=tmp_path / "atlas.nii.gz",
+        atlas_lut=None,
+        mask="gm",
+    )
+
+    data = json.loads(tsv_path.with_suffix(".json").read_text())
+    assert data["mask"] == "gm"
 
 
 # --- Integration Tests ---
