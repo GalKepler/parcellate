@@ -17,7 +17,7 @@ try:  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
     import tomli as tomllib  # type: ignore[import]
 
-from parcellate.interfaces.cat12.loader import discover_cat12_xml, extract_tiv_from_xml, load_cat12_inputs
+from parcellate.interfaces.cat12.loader import load_cat12_inputs
 from parcellate.interfaces.cat12.models import (
     AtlasDefinition,
     Cat12Config,
@@ -151,81 +151,12 @@ def _write_output(result: ParcellationOutput, destination: Path, config: Cat12Co
     return out_path
 
 
-def _find_first_tiv(root: Path, subject: str, session: str | None) -> float | None:
-    """Return the first valid TIV value found in CAT12 XML files, or None."""
-    for xml_path in discover_cat12_xml(root=root, subject=subject, session=session):
-        tiv = extract_tiv_from_xml(xml_path)
-        if tiv is not None:
-            return tiv
-    return None
-
-
-def _build_tiv_output_path(
-    context: SubjectContext,
-    destination: Path,
-) -> Path:
-    """Construct the output path for the TIV summary TSV."""
-    base = destination / "cat12"
-    subject_dir = base / f"sub-{context.subject_id}"
-    if context.session_id:
-        subject_dir = subject_dir / f"ses-{context.session_id}"
-    return subject_dir / "anat" / f"{context.label}_tiv.tsv"
-
-
-def _extract_and_write_tiv(
-    root: Path,
-    context: SubjectContext,
-    destination: Path,
-) -> Path | None:
-    """Extract TIV from CAT12 XML reports and write a standalone TSV.
-
-    Parameters
-    ----------
-    root
-        Root directory of CAT12 derivatives.
-    context
-        Subject/session context used to locate XML files and build the output path.
-    destination
-        Base output directory.
-
-    Returns
-    -------
-    Path | None
-        Path to the written TSV, or None if no TIV data was found.
-    """
-    import pandas as pd
-
-    xml_files = discover_cat12_xml(root=root, subject=context.subject_id, session=context.session_id)
-    if not xml_files:
-        LOGGER.debug("No CAT12 XML files found for %s", context.label)
-        return None
-
-    rows = []
-    for xml_path in xml_files:
-        tiv = extract_tiv_from_xml(xml_path)
-        if tiv is not None:
-            rows.append({"source_file": str(xml_path), "vol_TIV": tiv})
-
-    if not rows:
-        LOGGER.debug("No numeric TIV found in XML files for %s", context.label)
-        return None
-
-    tiv_path = _build_tiv_output_path(context, destination)
-    tiv_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(tiv_path, sep="\t", index=False)
-    LOGGER.debug("Wrote TIV output to %s", tiv_path)
-    return tiv_path
-
-
 def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
     """Run the parcellation workflow for a single recon."""
     plan = plan_parcellation_workflow(recon)
     pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
     reused_outputs: list[Path] = []
     outputs: list[Path] = []
-
-    # Extract TIV once per subject/session for column injection and standalone TSV
-    tiv_value = _find_first_tiv(config.input_root, recon.context.subject_id, recon.context.session_id)
 
     for atlas, scalar_maps in plan.items():
         remaining: list[ScalarMapDefinition] = []
@@ -247,18 +178,7 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
     if pending_plan:
         jobs = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in jobs:
-            if tiv_value is not None:
-                result.stats_table["vol_TIV"] = tiv_value
             outputs.append(_write_output(result, destination=config.output_dir, config=config))
-
-    # Write standalone TIV TSV
-    tiv_path = _extract_and_write_tiv(
-        root=config.input_root,
-        context=recon.context,
-        destination=config.output_dir,
-    )
-    if tiv_path is not None:
-        outputs.append(tiv_path)
 
     outputs.extend(reused_outputs)
     return outputs
