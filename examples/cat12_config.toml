@@ -14,7 +14,7 @@ output_dir = "/media/storage/yalab-dev/BIDS/derivatives/cat12_parcellated"
 # Subject/Session Selection
 # -------------------------
 # Optional: Process specific subjects (default: all discovered)
-# subjects = ["sub-01", "sub-02", "sub-03"]
+# subjects = ["CLMC10"]
 
 # Optional: Process specific sessions (default: all discovered)
 # Uncomment to restrict to specific sessions:
@@ -41,7 +41,7 @@ n_procs = 20
 # - Path to custom mask NIfTI: "/path/to/mask.nii.gz"
 # - Builtin mask name: "gm", "wm", or "brain"
 # - Omit this line for no masking
-# mask = "/path/to/mask.nii.gz"
+mask = "gm"
 
 # Atlas Definitions
 # -----------------
