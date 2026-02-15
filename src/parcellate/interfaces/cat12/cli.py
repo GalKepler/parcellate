@@ -22,7 +22,12 @@ import pandas as pd
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from parcellate.interfaces.cat12.cat12 import _build_output_path, _write_output
+from parcellate.interfaces.cat12.cat12 import (
+    _build_output_path,
+    _extract_and_write_tiv,
+    _find_first_tiv,
+    _write_output,
+)
 from parcellate.interfaces.cat12.loader import discover_scalar_maps
 from parcellate.interfaces.cat12.models import (
     AtlasDefinition,
@@ -276,11 +281,17 @@ def process_single_subject(
 
     outputs: list[Path] = []
     if pending_plan:
+        tiv_value = _find_first_tiv(config.input_root, context.subject_id, context.session_id)
         results = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in results:
+            if tiv_value is not None:
+                result.stats_table["vol_TIV"] = tiv_value
             out_path = _write_output(result, config.output_dir, config)
             outputs.append(out_path)
             LOGGER.info("Wrote: %s", out_path)
+        tiv_path = _extract_and_write_tiv(root=config.input_root, context=context, destination=config.output_dir)
+        if tiv_path is not None:
+            outputs.append(tiv_path)
 
     outputs.extend(reused_outputs)
     return outputs

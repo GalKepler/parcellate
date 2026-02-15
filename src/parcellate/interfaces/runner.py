@@ -5,7 +5,7 @@ This module provides functions for running parcellation workflows.
 
 import logging
 from collections.abc import Mapping
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Union
 
 from parcellate.interfaces.models import (
@@ -105,46 +105,45 @@ def run_parcellation_workflow(
     num_jobs = sum(len(scalar_maps) for scalar_maps in plan.values())
     logger.info("Found %d parcellation jobs to run.", num_jobs)
 
+    # Phase 1 (sequential): validate spaces, initialise and fit one parcellator per atlas
+    parcellators: dict[AtlasDefinition, tuple[VolumetricParcellator, list]] = {}
+    for atlas, scalar_maps in plan.items():
+        if not scalar_maps:
+            logger.debug("No scalar maps to parcellate for atlas %s", atlas.name)
+            continue
+
+        try:
+            _validate_scalar_map_spaces(scalar_maps)
+        except ScalarMapSpaceMismatchError as e:
+            logger.warning("Skipping atlas %s due to space mismatch: %s", atlas.name, e)
+            continue
+
+        logger.info("Initializing parcellator for atlas %s", atlas.name)
+        try:
+            vp = VolumetricParcellator(
+                atlas_img=atlas.nifti_path,
+                lut=atlas.lut,
+                mask=config.mask,
+                background_label=config.background_label,
+                resampling_target=config.resampling_target,
+            )
+            vp.fit(scalar_img=scalar_maps[0].nifti_path)
+            parcellators[atlas] = (vp, scalar_maps)
+        except Exception:
+            logger.exception("Failed to initialize parcellator for atlas %s", atlas.name)
+            continue
+
+    # Phase 2 (parallel): submit all scalar-map jobs across all atlases in one pool
     with ThreadPoolExecutor(max_workers=config.n_jobs) as executor:
-        for atlas, scalar_maps in plan.items():
-            if not scalar_maps:
-                logger.debug("No scalar maps to parcellate for atlas %s", atlas.name)
-                continue
-
-            # Validate that all scalar maps share the same space
-            try:
-                _validate_scalar_map_spaces(scalar_maps)
-            except ScalarMapSpaceMismatchError as e:
-                logger.warning(
-                    "Skipping atlas %s due to space mismatch: %s",
-                    atlas.name,
-                    e,
-                )
-                continue
-
-            logger.info("Initializing parcellator for atlas %s", atlas.name)
-            try:
-                vp = VolumetricParcellator(
-                    atlas_img=atlas.nifti_path,
-                    lut=atlas.lut,
-                    mask=config.mask,
-                    background_label=config.background_label,
-                    resampling_target=config.resampling_target,
-                )
-                vp.fit(scalar_img=scalar_maps[0].nifti_path)
-            except Exception:
-                logger.exception(
-                    "Failed to initialize parcellator for atlas %s",
-                    atlas.name,
-                )
-                continue
-
-            # Submit jobs to the executor
-            futures = [executor.submit(_parcellate_scalar_map, recon, atlas, sm, vp) for sm in scalar_maps]
-            for future in futures:
-                result = future.result()
-                if result:
-                    jobs.append(result)
+        future_to_sm = {
+            executor.submit(_parcellate_scalar_map, recon, atlas, sm, vp): (atlas, sm)
+            for atlas, (vp, scalar_maps) in parcellators.items()
+            for sm in scalar_maps
+        }
+        for future in as_completed(future_to_sm):
+            result = future.result()
+            if result:
+                jobs.append(result)
 
     logger.info("Finished parcellation workflow for %s", recon)
     return jobs

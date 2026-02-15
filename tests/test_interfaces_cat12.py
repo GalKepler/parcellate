@@ -11,6 +11,9 @@ import pytest
 
 from parcellate.interfaces.cat12.cat12 import (
     _build_output_path,
+    _build_tiv_output_path,
+    _extract_and_write_tiv,
+    _find_first_tiv,
     _write_output,
     load_config,
     run_parcellations,
@@ -30,7 +33,9 @@ from parcellate.interfaces.cat12.loader import (
     _discover_subjects,
     _extract_desc,
     _scalar_name,
+    discover_cat12_xml,
     discover_scalar_maps,
+    extract_tiv_from_xml,
     load_cat12_inputs,
 )
 from parcellate.interfaces.cat12.models import (
@@ -1038,3 +1043,161 @@ def test_subject_session_dataclass() -> None:
 
     subj_no_session = SubjectSession(subject_code="02", session_id=None)
     assert subj_no_session.session_id is None
+
+
+# --- TIV Tests ---
+
+_SIMPLE_TIV_XML = """\
+<?xml version="1.0" encoding="utf-8"?>
+<CAT>
+  <subjectmeasures>
+    <vol_TIV>1450.75</vol_TIV>
+  </subjectmeasures>
+</CAT>
+"""
+
+_DESCRIPTION_THEN_NUMERIC_XML = """\
+<?xml version="1.0" encoding="utf-8"?>
+<CAT>
+  <subjectmeasures>
+    <vol_TIV>description text</vol_TIV>
+  </subjectmeasures>
+  <vol_TIV>1234.5</vol_TIV>
+</CAT>
+"""
+
+_MALFORMED_XML = "this is not xml <<<"
+
+
+def test_discover_cat12_xml_finds_files(tmp_path: Path) -> None:
+    """discover_cat12_xml returns XML files present in the anat directory."""
+    anat_dir = tmp_path / "sub-01" / "anat"
+    anat_dir.mkdir(parents=True)
+    xml_file = anat_dir / "cat_sub-01_T1w.xml"
+    xml_file.write_text(_SIMPLE_TIV_XML)
+
+    result = discover_cat12_xml(tmp_path, "01", None)
+
+    assert result == [xml_file]
+
+
+def test_discover_cat12_xml_with_session(tmp_path: Path) -> None:
+    """discover_cat12_xml respects session subdirectory."""
+    anat_dir = tmp_path / "sub-01" / "ses-baseline" / "anat"
+    anat_dir.mkdir(parents=True)
+    xml_file = anat_dir / "cat_sub-01_ses-baseline_T1w.xml"
+    xml_file.write_text(_SIMPLE_TIV_XML)
+
+    assert discover_cat12_xml(tmp_path, "01", "baseline") == [xml_file]
+    assert discover_cat12_xml(tmp_path, "01", None) == []
+
+
+def test_discover_cat12_xml_returns_empty_when_no_xml(tmp_path: Path) -> None:
+    """discover_cat12_xml returns empty list when no XML files exist."""
+    anat_dir = tmp_path / "sub-01" / "anat"
+    anat_dir.mkdir(parents=True)
+
+    assert discover_cat12_xml(tmp_path, "01", None) == []
+
+
+def test_discover_cat12_xml_returns_empty_when_missing_dir(tmp_path: Path) -> None:
+    """discover_cat12_xml returns empty list when directory doesn't exist."""
+    assert discover_cat12_xml(tmp_path, "99", None) == []
+
+
+def test_extract_tiv_from_xml_valid(tmp_path: Path) -> None:
+    """extract_tiv_from_xml returns the numeric TIV value from a valid XML."""
+    xml_path = tmp_path / "cat_sub-01.xml"
+    xml_path.write_text(_SIMPLE_TIV_XML)
+
+    result = extract_tiv_from_xml(xml_path)
+
+    assert result == pytest.approx(1450.75)
+
+
+def test_extract_tiv_from_xml_fallback_search(tmp_path: Path) -> None:
+    """extract_tiv_from_xml falls back to full-tree search when subjectmeasures has non-numeric value."""
+    xml_path = tmp_path / "cat_sub-01.xml"
+    xml_path.write_text(_DESCRIPTION_THEN_NUMERIC_XML)
+
+    result = extract_tiv_from_xml(xml_path)
+
+    assert result == pytest.approx(1234.5)
+
+
+def test_extract_tiv_from_xml_malformed(tmp_path: Path) -> None:
+    """extract_tiv_from_xml returns None for malformed XML."""
+    xml_path = tmp_path / "cat_bad.xml"
+    xml_path.write_text(_MALFORMED_XML)
+
+    assert extract_tiv_from_xml(xml_path) is None
+
+
+def test_extract_tiv_from_xml_no_tiv_element(tmp_path: Path) -> None:
+    """extract_tiv_from_xml returns None when vol_TIV element is absent."""
+    xml_path = tmp_path / "cat_no_tiv.xml"
+    xml_path.write_text("<CAT><subjectmeasures><vol_WMH>10</vol_WMH></subjectmeasures></CAT>")
+
+    assert extract_tiv_from_xml(xml_path) is None
+
+
+def test_build_tiv_output_path_with_session(tmp_path: Path) -> None:
+    """_build_tiv_output_path includes session subdirectory when present."""
+    context = SubjectContext(subject_id="01", session_id="baseline")
+
+    path = _build_tiv_output_path(context, tmp_path)
+
+    assert path == tmp_path / "cat12" / "sub-01" / "ses-baseline" / "anat" / "sub-01_ses-baseline_tiv.tsv"
+
+
+def test_build_tiv_output_path_without_session(tmp_path: Path) -> None:
+    """_build_tiv_output_path omits session subdirectory when absent."""
+    context = SubjectContext(subject_id="01")
+
+    path = _build_tiv_output_path(context, tmp_path)
+
+    assert path == tmp_path / "cat12" / "sub-01" / "anat" / "sub-01_tiv.tsv"
+
+
+def test_extract_and_write_tiv_creates_file(tmp_path: Path) -> None:
+    """_extract_and_write_tiv writes a TSV with source_file and vol_TIV columns."""
+    anat_dir = tmp_path / "sub-01" / "anat"
+    anat_dir.mkdir(parents=True)
+    xml_file = anat_dir / "cat_sub-01_T1w.xml"
+    xml_file.write_text(_SIMPLE_TIV_XML)
+    context = SubjectContext(subject_id="01")
+
+    tiv_path = _extract_and_write_tiv(root=tmp_path, context=context, destination=tmp_path)
+
+    assert tiv_path is not None
+    assert tiv_path.exists()
+    df = pd.read_csv(tiv_path, sep="\t")
+    assert list(df.columns) == ["source_file", "vol_TIV"]
+    assert len(df) == 1
+    assert df["vol_TIV"].iloc[0] == pytest.approx(1450.75)
+
+
+def test_extract_and_write_tiv_returns_none_when_no_xml(tmp_path: Path) -> None:
+    """_extract_and_write_tiv returns None when no XML files exist."""
+    context = SubjectContext(subject_id="01")
+    (tmp_path / "sub-01" / "anat").mkdir(parents=True)
+
+    assert _extract_and_write_tiv(root=tmp_path, context=context, destination=tmp_path) is None
+
+
+def test_find_first_tiv_returns_value(tmp_path: Path) -> None:
+    """_find_first_tiv returns the first valid TIV found in XML files."""
+    anat_dir = tmp_path / "sub-01" / "anat"
+    anat_dir.mkdir(parents=True)
+    (anat_dir / "cat_sub-01_T1w.xml").write_text(_SIMPLE_TIV_XML)
+
+    result = _find_first_tiv(tmp_path, "01", None)
+
+    assert result == pytest.approx(1450.75)
+
+
+def test_find_first_tiv_returns_none_when_no_xml(tmp_path: Path) -> None:
+    """_find_first_tiv returns None when no XML files are found."""
+    (tmp_path / "sub-01" / "anat").mkdir(parents=True)
+
+    assert _find_first_tiv(tmp_path, "01", None) is None
