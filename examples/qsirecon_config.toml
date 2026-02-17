@@ -44,7 +44,7 @@ mask = "gm"
 #     0.3 = more liberal inclusion, keeps voxels with >30% probability
 # Reflected as the "maskthr-<value>" entity in output filenames and recorded
 # in the JSON sidecar for provenance.
-# mask_threshold = 0.5
+mask_threshold = 0.5
 
 # Atlas Definitions
 # -----------------

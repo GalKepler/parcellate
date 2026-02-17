@@ -124,7 +124,7 @@ class VolumetricParcellator:
             Loaded mask image.
         """
         if isinstance(mask, str) and mask in self.BUILTIN_STANDARD_MASKS:
-            return self.BUILTIN_STANDARD_MASKS[mask]()
+            return self.BUILTIN_STANDARD_MASKS[mask](threshold=self.mask_threshold)
         return _load_nifti(mask)
 
     def _get_labels(self, labels: Mapping[int, str] | Sequence[str] | None) -> list[int]:
