@@ -41,7 +41,7 @@ n_procs = 20
 # - Path to custom mask NIfTI: "/path/to/mask.nii.gz"
 # - Builtin mask name: "gm", "wm", or "brain"
 # - Omit this line for no masking
-# mask = "gm"
+mask = "gm"
 
 # Optional: Threshold for the mask image
 # Voxels with mask values strictly greater than this threshold are included;
@@ -52,7 +52,7 @@ n_procs = 20
 #     0.3 = more liberal inclusion, keeps voxels with >30% probability
 # Reflected as the "maskthr-<value>" entity in output filenames and recorded
 # in the JSON sidecar for provenance.
-# mask_threshold = 0.5
+mask_threshold = 0.5
 
 # Atlas Definitions
 # -----------------
@@ -69,6 +69,19 @@ path = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Sch
 lut = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_dseg.tsv"
 space = "MNI152NLin2009cAsym"
 resolution = "01"
+
+# For 4D probabilistic atlases (e.g. XTRACT, Harvard-Oxford):
+# atlas_threshold controls which voxels are included per tract/region.
+# Voxels with probability > atlas_threshold are included.
+# The LUT "index" column uses 1-based numbering (index 1 = first volume).
+# Default: 0.0 (any non-zero probability is included)
+#
+# [[atlases]]
+# name = "XTRACT"
+# path = "/path/to/xtract_prob_atlas.nii.gz"
+# lut = "/path/to/xtract_lut.tsv"
+# space = "MNI152NLin2009cAsym"
+# atlas_threshold = 0.25
 
 # Expected Output Structure
 # --------------------------

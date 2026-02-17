@@ -76,6 +76,7 @@ class AtlasDefinition:
     lut: pd.DataFrame | Path | None = None
     resolution: str | None = None
     space: str | None = None
+    atlas_threshold: float = 0.0
 
 
 @dataclass(frozen=True)

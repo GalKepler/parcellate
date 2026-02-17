@@ -234,17 +234,12 @@ def test_lut_missing_columns() -> None:
         VolumetricParcellator(atlas_img, lut=lut)
 
 
-def test_atlas_not_3d() -> None:
-    data = np.array(
-        [
-            [[0, 1], [1, 2]],
-            [[0, 2], [2, 2]],
-        ],
-        dtype=np.int16,
-    )
-    atlas_img_4d = nib.Nifti1Image(np.expand_dims(data, axis=-1), np.eye(4))
+def test_atlas_5d_raises_error() -> None:
+    """5D+ atlas should still raise AtlasShapeError."""
+    data = np.zeros((2, 2, 2, 2, 2), dtype=np.float32)
+    atlas_img_5d = nib.Nifti1Image(data, np.eye(4))
     with pytest.raises(AtlasShapeError):
-        VolumetricParcellator(atlas_img_4d)
+        VolumetricParcellator(atlas_img_5d)
 
 
 def test_no_statistical_functions() -> None:
@@ -522,3 +517,169 @@ def test_transform_with_different_path_resamples(mocker) -> None:
     assert df is not None
     # _prepare_map should be called because the image is different
     assert prepare_map_spy.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# 4D probabilistic atlas tests
+# ---------------------------------------------------------------------------
+
+
+def _prob_atlas_2x2x2x2() -> nib.Nifti1Image:
+    """Create a small 2x2x2x2 probabilistic atlas with two regions."""
+    # Volume 0 (region 1): high probability in voxels [0,0,0] and [0,1,0]
+    # Volume 1 (region 2): high probability in voxels [1,0,1] and [1,1,1]
+    data = np.zeros((2, 2, 2, 2), dtype=np.float32)
+    data[0, 0, 0, 0] = 0.9
+    data[0, 1, 0, 0] = 0.8
+    data[1, 0, 1, 1] = 0.7
+    data[1, 1, 1, 1] = 0.6
+    return nib.Nifti1Image(data, np.eye(4))
+
+
+def test_4d_atlas_accepted() -> None:
+    """A 4D atlas should be accepted and detected as probabilistic."""
+    atlas_img = _prob_atlas_2x2x2x2()
+    vp = VolumetricParcellator(atlas_img)
+
+    assert vp._is_probabilistic is True
+    assert vp.regions == (1, 2)
+
+
+def test_probabilistic_fit_transform() -> None:
+    """End-to-end fit+transform with a 4D probabilistic atlas."""
+    atlas_img = _prob_atlas_2x2x2x2()
+    scalar_data = np.ones((2, 2, 2), dtype=np.float32) * 3.0
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img)
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    assert set(df["index"].tolist()) == {1, 2}
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    r2 = df.loc[df["index"] == 2].iloc[0]
+    # Default threshold=0.0: both non-zero voxels in each volume should be included
+    assert r1["voxel_count"] == 2
+    assert r2["voxel_count"] == 2
+    assert r1["mean"] == pytest.approx(3.0)
+    assert r2["mean"] == pytest.approx(3.0)
+
+
+def test_probabilistic_overlap() -> None:
+    """A voxel with high probability in two regions appears in both stats."""
+    # Overlap voxel [0,0,0] has high prob in both volumes
+    data = np.zeros((2, 2, 2, 2), dtype=np.float32)
+    data[0, 0, 0, 0] = 0.9  # region 1
+    data[0, 0, 0, 1] = 0.8  # region 2 — same spatial voxel
+    data[1, 1, 1, 0] = 0.7  # region 1 only
+    atlas_img = nib.Nifti1Image(data, np.eye(4))
+
+    scalar_data = np.array(
+        [[[10.0, 5.0], [5.0, 5.0]], [[5.0, 5.0], [5.0, 20.0]]],
+        dtype=np.float32,
+    )
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img)
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    r2 = df.loc[df["index"] == 2].iloc[0]
+    # Overlap voxel [0,0,0]=10.0 must appear in both regions
+    assert r1["voxel_count"] == 2  # [0,0,0] and [1,1,1]
+    assert r2["voxel_count"] == 1  # [0,0,0] only
+    assert r1["mean"] == pytest.approx(np.mean([10.0, 20.0]))
+    assert r2["mean"] == pytest.approx(10.0)
+
+
+def test_probabilistic_with_lut() -> None:
+    """LUT label names appear in output; 1-based index mapping works."""
+    atlas_img = _prob_atlas_2x2x2x2()
+    lut = pd.DataFrame({
+        "index": [1, 2],
+        "label": ["TractA", "TractB"],
+    })
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img, lut=lut)
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    assert df.loc[df["index"] == 1, "label"].iloc[0] == "TractA"
+    assert df.loc[df["index"] == 2, "label"].iloc[0] == "TractB"
+
+
+def test_probabilistic_with_mask() -> None:
+    """External mask correctly zeros out probability across all volumes."""
+    atlas_img = _prob_atlas_2x2x2x2()
+    # Mask out voxel [0,0,0] — it has high prob in region 1
+    mask_data = np.ones((2, 2, 2), dtype=np.uint8)
+    mask_data[0, 0, 0] = 0
+    mask_img = nib.Nifti1Image(mask_data, atlas_img.affine)
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img, mask=mask_img)
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    # Voxel [0,0,0] masked out → only [0,1,0] remains for region 1
+    assert r1["voxel_count"] == 1
+
+
+def test_probabilistic_threshold_excludes_low() -> None:
+    """Voxels at or below threshold are excluded from region masks."""
+    data = np.zeros((2, 2, 2, 1), dtype=np.float32)
+    data[0, 0, 0, 0] = 0.5  # exactly at threshold — excluded
+    data[0, 1, 0, 0] = 0.51  # just above — included
+    data[1, 0, 0, 0] = 0.2  # well below — excluded
+    atlas_img = nib.Nifti1Image(data, np.eye(4))
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img, atlas_threshold=0.5)
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    assert r1["voxel_count"] == 1  # only the 0.51 voxel
+
+
+def test_probabilistic_default_threshold_zero() -> None:
+    """Default threshold=0.0 includes any non-zero probability voxel."""
+    data = np.zeros((2, 2, 2, 1), dtype=np.float32)
+    data[0, 0, 0, 0] = 0.01  # tiny but non-zero
+    data[0, 1, 0, 0] = 0.99
+    atlas_img = nib.Nifti1Image(data, np.eye(4))
+    scalar_img = nib.Nifti1Image(np.ones((2, 2, 2), dtype=np.float32), atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img)  # atlas_threshold=0.0 by default
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    assert r1["voxel_count"] == 2  # both non-zero voxels included
+
+
+def test_3d_atlas_unaffected() -> None:
+    """Existing 3D discrete atlas behaviour is unchanged by the 4D feature."""
+    atlas_img = _atlas()
+    scalar_data = np.array(
+        [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+        ],
+        dtype=np.float32,
+    )
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img)
+    assert vp._is_probabilistic is False
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    assert set(df["index"].tolist()) == {1, 2}
+    r1 = df.loc[df["index"] == 1].iloc[0]
+    r2 = df.loc[df["index"] == 2].iloc[0]
+    assert r1["voxel_count"] == 2
+    assert r2["voxel_count"] == 4
