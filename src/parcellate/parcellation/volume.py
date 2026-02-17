@@ -66,6 +66,7 @@ class VolumetricParcellator:
         lut: pd.DataFrame | str | Path | None = None,
         *,
         mask: nib.Nifti1Image | str | Path | None = None,
+        mask_threshold: float = 0.0,
         background_label: int = 0,
         resampling_target: Literal["data", "labels", "atlas", None] = "data",
         stat_functions: Mapping[str, Callable[..., float]] | None = None,
@@ -84,6 +85,12 @@ class VolumetricParcellator:
             "index" and "label" following the BIDS standard.
         mask : nib.Nifti1Image | str | Path | None, optional
             Optional mask to apply to the atlas, by default None
+        mask_threshold : float, optional
+            Threshold for the mask image. Voxels with mask values strictly greater
+            than this threshold are included; all others are excluded. Default is
+            ``0.0``, which preserves the original behaviour of including every
+            non-zero voxel. Use values in [0, 1] for probability maps (e.g.
+            ``0.5`` to keep only voxels with >50 % gray-matter probability).
         background_label : int, optional
             Label value to treat as background, by default 0
         resampling_target : Literal["data", "labels", None], optional
@@ -94,6 +101,7 @@ class VolumetricParcellator:
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
         self.mask = self._load_mask(mask) if mask is not None else None
+        self.mask_threshold = float(mask_threshold)
         self.background_label = int(background_label)
         self.resampling_target = resampling_target
         self._atlas_data = self._load_atlas_data()
@@ -184,7 +192,7 @@ class VolumetricParcellator:
             Masked atlas image.
         """
         atlas_data = np.asarray(self._prepared_atlas_img.get_fdata())
-        mask_data = np.asarray(self._prepared_mask.get_fdata()).astype(bool)
+        mask_data = np.asarray(self._prepared_mask.get_fdata()) > self.mask_threshold
         atlas_data[~mask_data] = self.background_label
         return nib.Nifti1Image(atlas_data, self._prepared_atlas_img.affine, self._prepared_atlas_img.header)
 

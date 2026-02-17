@@ -41,7 +41,18 @@ n_procs = 20
 # - Path to custom mask NIfTI: "/path/to/mask.nii.gz"
 # - Builtin mask name: "gm", "wm", or "brain"
 # - Omit this line for no masking
-mask = "gm"
+# mask = "gm"
+
+# Optional: Threshold for the mask image
+# Voxels with mask values strictly greater than this threshold are included;
+# all others are excluded.
+# - Default: 0.0 (any non-zero voxel passes — equivalent to a binary mask)
+# - Use values in [0, 1] for tissue probability maps, e.g.:
+#     0.5 = only voxels with >50% gray-matter probability
+#     0.3 = more liberal inclusion, keeps voxels with >30% probability
+# Reflected as the "maskthr-<value>" entity in output filenames and recorded
+# in the JSON sidecar for provenance.
+# mask_threshold = 0.5
 
 # Atlas Definitions
 # -----------------

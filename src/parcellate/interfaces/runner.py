@@ -124,6 +124,7 @@ def run_parcellation_workflow(
                 atlas_img=atlas.nifti_path,
                 lut=atlas.lut,
                 mask=config.mask,
+                mask_threshold=config.mask_threshold,
                 background_label=config.background_label,
                 resampling_target=config.resampling_target,
             )

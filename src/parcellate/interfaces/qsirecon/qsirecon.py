@@ -32,6 +32,7 @@ from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import (
     _as_list,
     _mask_label,
+    _mask_threshold_label,
     _parse_log_level,
     _parse_mask,
     parse_atlases,
@@ -67,6 +68,7 @@ def load_config(args: argparse.Namespace) -> QSIReconConfig:
 
     mask_value = args.mask or data.get("mask")
     mask = _parse_mask(mask_value)
+    mask_threshold = float(getattr(args, "mask_threshold", None) or data.get("mask_threshold", 0.0))
     force = args.force or bool(data.get("force", False))
     log_level = _parse_log_level(args.log_level or data.get("log_level"))
     n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
@@ -79,6 +81,7 @@ def load_config(args: argparse.Namespace) -> QSIReconConfig:
         subjects=subjects,
         sessions=sessions,
         mask=mask,
+        mask_threshold=mask_threshold,
         force=force,
         log_level=log_level,
         n_jobs=n_jobs,
@@ -92,6 +95,7 @@ def _build_output_path(
     scalar_map: ScalarMapDefinition,
     destination: Path,
     mask: Path | str | None = None,
+    mask_threshold: float = 0.0,
 ) -> Path:
     """Construct the output path for a parcellation result."""
 
@@ -119,6 +123,9 @@ def _build_output_path(
     label = _mask_label(mask)
     if label:
         entities.append(f"mask-{label}")
+    thr_label = _mask_threshold_label(mask_threshold)
+    if thr_label:
+        entities.append(f"maskthr-{thr_label}")
 
     filename = "_".join([*entities, "parc"]) + ".tsv"
     return output_dir / filename
@@ -133,6 +140,7 @@ def _write_output(result: ParcellationOutput, destination: Path, config: QSIReco
         scalar_map=result.scalar_map,
         destination=destination,
         mask=config.mask,
+        mask_threshold=config.mask_threshold,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -150,16 +158,17 @@ def _write_output(result: ParcellationOutput, destination: Path, config: QSIReco
         space=result.atlas.space or result.scalar_map.space,
         resampling_target=config.resampling_target,
         background_label=config.background_label,
+        mask_threshold=config.mask_threshold,
     )
     return out_path
 
 
 def _run_recon(
     recon: ReconInput,
-    plan: dict[AtlasDefinition, list[ScalarMapDefinition]],
     config: QSIReconConfig,
 ) -> list[Path]:
     """Run the parcellation workflow for a single recon."""
+    plan = plan_parcellation_workflow(recon)
     pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
     reused_outputs: list[Path] = []
     outputs: list[Path] = []
@@ -174,6 +183,7 @@ def _run_recon(
                     scalar_map=scalar_map,
                     destination=config.output_dir,
                     mask=config.mask,
+                    mask_threshold=config.mask_threshold,
                 )
                 if not config.force and out_path.exists():
                     LOGGER.info("Reusing existing parcellation output at %s", out_path)
@@ -217,21 +227,18 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
         LOGGER.warning("No recon inputs discovered. Nothing to do.")
         return []
 
-    outputs: list[list[Path]] = []
+    outputs: list[Path] = []
+    total = len(recon_inputs)
     if config.n_procs > 1:
         LOGGER.info("Running parcellation across subjects with %d processes", config.n_procs)
         with ProcessPoolExecutor(max_workers=config.n_procs) as executor:
-            future_to_recon = {
-                executor.submit(_run_recon, recon, plan_parcellation_workflow(recon), config): recon
-                for recon in recon_inputs
-            }
+            future_to_recon = {executor.submit(_run_recon, recon, config): recon for recon in recon_inputs}
             LOGGER.info("Submitted %d parcellation jobs to the executor", len(future_to_recon))
-            total = len(future_to_recon)
             for i, future in enumerate(as_completed(future_to_recon), start=1):
                 recon = future_to_recon[future]
                 try:
                     result = future.result()
-                    outputs.append(result)
+                    outputs.extend(result)
                     LOGGER.info(
                         "[%d/%d] Finished parcellation for %s (%d outputs)",
                         i,
@@ -247,11 +254,27 @@ def run_parcellations(config: QSIReconConfig) -> list[Path]:
                         recon.context.label,
                     )
     else:
-        outputs = [_run_recon(recon, plan_parcellation_workflow(recon), config) for recon in recon_inputs]
+        for i, recon in enumerate(recon_inputs, start=1):
+            try:
+                result = _run_recon(recon, config)
+                outputs.extend(result)
+                LOGGER.info(
+                    "[%d/%d] Finished parcellation for %s (%d outputs)",
+                    i,
+                    total,
+                    recon.context.label,
+                    len(result),
+                )
+            except Exception:
+                LOGGER.exception(
+                    "[%d/%d] Failed parcellation for %s",
+                    i,
+                    total,
+                    recon.context.label,
+                )
 
-    flat_outputs = [item for sublist in outputs for item in sublist]
-    LOGGER.info("Finished writing %d parcellation files", len(flat_outputs))
-    return flat_outputs
+    LOGGER.info("Finished writing %d parcellation files", len(outputs))
+    return outputs
 
 
 def add_cli_args(parser: argparse.ArgumentParser) -> None:
@@ -287,6 +310,17 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
         "--mask",
         type=Path,
         help="Optional path to a brain mask to apply during parcellation.",
+    )
+    parser.add_argument(
+        "--mask-threshold",
+        type=float,
+        default=0.0,
+        dest="mask_threshold",
+        help=(
+            "Threshold for the mask image. Voxels with mask values strictly greater than this "
+            "value are included; all others are excluded. Default: 0.0 (any non-zero voxel passes). "
+            "Use values in [0, 1] for probability maps, e.g. 0.5 for >50%% probability."
+        ),
     )
     parser.add_argument(
         "--force",
