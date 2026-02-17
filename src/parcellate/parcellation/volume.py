@@ -100,8 +100,8 @@ class VolumetricParcellator:
         """
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
-        self.mask = self._load_mask(mask) if mask is not None else None
         self.mask_threshold = float(mask_threshold)
+        self.mask = self._load_mask(mask) if mask is not None else None
         self.background_label = int(background_label)
         self.resampling_target = resampling_target
         self._atlas_data = self._load_atlas_data()
