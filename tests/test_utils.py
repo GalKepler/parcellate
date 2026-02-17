@@ -5,7 +5,17 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from parcellate.interfaces.utils import _as_list, _mask_label, _parse_log_level, _parse_mask, parse_atlases
+import pytest
+
+from parcellate.interfaces.utils import (
+    _as_list,
+    _atlas_threshold_label,
+    _mask_label,
+    _mask_threshold_label,
+    _parse_log_level,
+    _parse_mask,
+    parse_atlases,
+)
 
 
 class TestParseLogLevel:
@@ -305,3 +315,89 @@ class TestMaskLabel:
         """Test that any Path produces the 'custom' label."""
         assert _mask_label(Path("/some/mask.nii.gz")) == "custom"
         assert _mask_label(Path("relative/mask.nii.gz")) == "custom"
+
+
+class TestMaskThresholdLabel:
+    """Tests for _mask_threshold_label utility."""
+
+    def test_zero_returns_none(self) -> None:
+        """Default threshold 0.0 produces no entity label."""
+        assert _mask_threshold_label(0.0) is None
+
+    def test_clean_fraction_returns_percentage(self) -> None:
+        """Clean fractions are expressed as integer percentages."""
+        assert _mask_threshold_label(0.5) == "50"
+        assert _mask_threshold_label(0.25) == "25"
+        assert _mask_threshold_label(0.1) == "10"
+
+    def test_non_clean_fraction_uses_p_separator(self) -> None:
+        """Non-clean fractions use 'p' instead of '.'."""
+        # 1/3 cannot be expressed as a clean integer percentage
+        val = 1 / 3
+        result = _mask_threshold_label(val)
+        assert result is not None
+        assert "p" in result or "." not in result  # uses 'p' as decimal separator
+
+
+class TestAtlasThresholdLabel:
+    """Tests for _atlas_threshold_label utility."""
+
+    def test_zero_returns_none(self) -> None:
+        """Default threshold 0.0 produces no entity label."""
+        assert _atlas_threshold_label(0.0) is None
+
+    def test_clean_fraction_returns_percentage(self) -> None:
+        """Clean fractions are expressed as integer percentages."""
+        assert _atlas_threshold_label(0.5) == "50"
+        assert _atlas_threshold_label(0.25) == "25"
+        assert _atlas_threshold_label(0.1) == "10"
+
+    def test_non_clean_fraction_uses_p_separator(self) -> None:
+        """Non-clean fractions use 'p' instead of '.'."""
+        # 1/3 cannot be expressed as a clean integer percentage
+        val = 1 / 3
+        result = _atlas_threshold_label(val)
+        assert result is not None
+        assert "." not in result  # '.' is replaced with 'p'
+
+    def test_one_returns_100(self) -> None:
+        """Threshold of 1.0 returns '100'."""
+        assert _atlas_threshold_label(1.0) == "100"
+
+
+class TestParseAtlasesThreshold:
+    """Tests for atlas_threshold in parse_atlases."""
+
+    def test_default_atlas_threshold_is_zero(self) -> None:
+        """Atlas with no atlas_threshold field defaults to 0.0."""
+        config = [{"name": "Test", "path": "/path/atlas.nii.gz"}]
+        atlases = parse_atlases(config)
+
+        assert atlases[0].atlas_threshold == 0.0
+
+    def test_atlas_threshold_parsed(self) -> None:
+        """atlas_threshold is read from config dict."""
+        config = [{"name": "XTRACT", "path": "/path/xtract.nii.gz", "atlas_threshold": 0.25}]
+        atlases = parse_atlases(config)
+
+        assert atlases[0].atlas_threshold == pytest.approx(0.25)
+
+    def test_atlas_threshold_zero_explicit(self) -> None:
+        """Explicit atlas_threshold=0.0 is correctly stored."""
+        config = [{"name": "Test", "path": "/path/atlas.nii.gz", "atlas_threshold": 0.0}]
+        atlases = parse_atlases(config)
+
+        assert atlases[0].atlas_threshold == 0.0
+
+    def test_multiple_atlases_independent_thresholds(self) -> None:
+        """Each atlas can have its own independent atlas_threshold."""
+        config = [
+            {"name": "Atlas1", "path": "/path/1.nii.gz", "atlas_threshold": 0.1},
+            {"name": "Atlas2", "path": "/path/2.nii.gz", "atlas_threshold": 0.5},
+            {"name": "Atlas3", "path": "/path/3.nii.gz"},
+        ]
+        atlases = parse_atlases(config)
+
+        assert atlases[0].atlas_threshold == pytest.approx(0.1)
+        assert atlases[1].atlas_threshold == pytest.approx(0.5)
+        assert atlases[2].atlas_threshold == 0.0

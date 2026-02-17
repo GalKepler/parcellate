@@ -81,6 +81,46 @@ def _mask_threshold_label(threshold: float) -> str | None:
     return str(threshold).replace(".", "p")
 
 
+def _atlas_threshold_label(threshold: float) -> str | None:
+    """Return a compact string label for an atlas threshold value.
+
+    Used to build the ``atlasthr-*`` BIDS filename entity when the threshold
+    differs from the default of ``0.0``.
+
+    Parameters
+    ----------
+    threshold
+        The atlas threshold value (typically in ``[0, 1]``).
+
+    Returns
+    -------
+    str | None
+        * ``None`` when *threshold* is ``0.0`` (default — no entity in filename).
+        * An integer-percentage string for "clean" fractions (e.g. ``0.5`` →
+          ``"50"``, ``0.25`` → ``"25"``).
+        * The raw float representation with ``"."`` replaced by ``"p"`` for
+          values that do not map to a whole-number percentage (e.g. ``0.33`` →
+          ``"0p33"``).
+
+    Examples
+    --------
+    >>> _atlas_threshold_label(0.0)
+
+    >>> _atlas_threshold_label(0.5)
+    '50'
+    >>> _atlas_threshold_label(0.25)
+    '25'
+    >>> _atlas_threshold_label(0.33)
+    '0p33'
+    """
+    if threshold == 0.0:
+        return None
+    pct = threshold * 100
+    if pct == int(pct):
+        return str(int(pct))
+    return str(threshold).replace(".", "p")
+
+
 def _parse_mask(value: str | None) -> Path | str | None:
     """Return the mask as a resolved Path or, for builtin names, as the original string.
 
@@ -166,6 +206,7 @@ def write_parcellation_sidecar(
     resampling_target: str | None = None,
     background_label: int = 0,
     mask_threshold: float = 0.0,
+    atlas_threshold: float = 0.0,
 ) -> Path:
     """Write a JSON sidecar file alongside a parcellation TSV.
 
@@ -196,6 +237,10 @@ def write_parcellation_sidecar(
         Threshold applied to the mask image. Voxels with mask values strictly
         greater than this value are included. Default is ``0.0`` (any non-zero
         voxel passes). Recorded as provenance in the sidecar.
+    atlas_threshold
+        Threshold applied to probabilistic (4D) atlas volumes. Voxels with
+        probability strictly greater than this value are included per region.
+        Default is ``0.0``. Recorded as provenance in the sidecar.
 
     Returns
     -------
@@ -213,6 +258,7 @@ def write_parcellation_sidecar(
         "original_file": str(original_file),
         "mask": str(mask) if mask is not None else None,
         "mask_threshold": mask_threshold,
+        "atlas_threshold": atlas_threshold,
         "parcellation_scheme": {
             "name": atlas_name,
             "image": str(atlas_image),
@@ -262,6 +308,7 @@ def parse_atlases(
         lut_path = Path(lut).expanduser().resolve() if lut else None
         space = cfg.get("space", default_space)
         resolution = cfg.get("resolution")
+        atlas_threshold = float(cfg.get("atlas_threshold", 0.0))
 
         atlases.append(
             AtlasDefinition(
@@ -270,6 +317,7 @@ def parse_atlases(
                 lut=lut_path,
                 space=space,
                 resolution=resolution,
+                atlas_threshold=atlas_threshold,
             )
         )
     return atlases

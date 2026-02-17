@@ -31,6 +31,7 @@ from parcellate.interfaces.qsirecon.models import (
 from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.utils import (
     _as_list,
+    _atlas_threshold_label,
     _mask_label,
     _mask_threshold_label,
     _parse_log_level,
@@ -96,6 +97,7 @@ def _build_output_path(
     destination: Path,
     mask: Path | str | None = None,
     mask_threshold: float = 0.0,
+    atlas_threshold: float = 0.0,
 ) -> Path:
     """Construct the output path for a parcellation result."""
 
@@ -126,6 +128,9 @@ def _build_output_path(
     thr_label = _mask_threshold_label(mask_threshold)
     if thr_label:
         entities.append(f"maskthr-{thr_label}")
+    athr_label = _atlas_threshold_label(atlas_threshold)
+    if athr_label:
+        entities.append(f"atlasthr-{athr_label}")
 
     filename = "_".join([*entities, "parc"]) + ".tsv"
     return output_dir / filename
@@ -141,6 +146,7 @@ def _write_output(result: ParcellationOutput, destination: Path, config: QSIReco
         destination=destination,
         mask=config.mask,
         mask_threshold=config.mask_threshold,
+        atlas_threshold=result.atlas.atlas_threshold,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -159,6 +165,7 @@ def _write_output(result: ParcellationOutput, destination: Path, config: QSIReco
         resampling_target=config.resampling_target,
         background_label=config.background_label,
         mask_threshold=config.mask_threshold,
+        atlas_threshold=result.atlas.atlas_threshold,
     )
     return out_path
 
@@ -184,6 +191,7 @@ def _run_recon(
                     destination=config.output_dir,
                     mask=config.mask,
                     mask_threshold=config.mask_threshold,
+                    atlas_threshold=atlas.atlas_threshold,
                 )
                 if not config.force and out_path.exists():
                     LOGGER.info("Reusing existing parcellation output at %s", out_path)

@@ -125,6 +125,7 @@ def run_parcellation_workflow(
                 lut=atlas.lut,
                 mask=config.mask,
                 mask_threshold=config.mask_threshold,
+                atlas_threshold=atlas.atlas_threshold,
                 background_label=config.background_label,
                 resampling_target=config.resampling_target,
             )

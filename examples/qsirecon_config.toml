@@ -24,7 +24,7 @@ output_dir = "/media/storage/yalab-dev/derivatives/qsiparc"
 force = true
 
 # Logging verbosity
-log_level = "DEBUG"
+log_level = "INFO"
 
 # Parallel jobs within subject
 n_jobs = 20
@@ -63,6 +63,19 @@ path = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Sch
 lut = "/media/storage/yalab-dev/voxelops/Schaefer2018Tian2020_atlases/atlas-Schaefer2018N400n7Tian2020S3/atlas-Schaefer2018N400n7Tian2020S3_dseg.tsv"
 space = "MNI152NLin2009cAsym"
 resolution = "01"
+
+# For 4D probabilistic atlases (e.g. XTRACT, Harvard-Oxford):
+# atlas_threshold controls which voxels are included per tract/region.
+# Voxels with probability > atlas_threshold are included.
+# The LUT "index" column uses 1-based numbering (index 1 = first volume).
+# Default: 0.0 (any non-zero probability is included)
+#
+# [[atlases]]
+# name = "XTRACT"
+# path = "/path/to/xtract_prob_atlas.nii.gz"
+# lut = "/path/to/xtract_lut.tsv"
+# space = "MNI152NLin6Asym"
+# atlas_threshold = 0.25
 
 # Expected Input Structure
 # -------------------------

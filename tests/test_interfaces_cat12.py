@@ -361,6 +361,7 @@ class DummyParcellator:
         lut=None,
         mask=None,
         mask_threshold=0.0,
+        atlas_threshold=0.0,
         background_label=0,
         resampling_target="data",
     ) -> None:

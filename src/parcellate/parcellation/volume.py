@@ -28,7 +28,9 @@ class MissingLUTColumnsError(ValueError):
 
 
 class AtlasShapeError(ValueError):
-    def __init__(self, message: str = "Atlas image must be 3D."):
+    def __init__(self, message: str = "Atlas image must be 3D or 4D.", ndim: int | None = None):
+        if ndim is not None:
+            message = f"Atlas image must be 3D or 4D, got {ndim}D."
         super().__init__(message)
 
 
@@ -67,6 +69,7 @@ class VolumetricParcellator:
         *,
         mask: nib.Nifti1Image | str | Path | None = None,
         mask_threshold: float = 0.0,
+        atlas_threshold: float = 0.0,
         background_label: int = 0,
         resampling_target: Literal["data", "labels", "atlas", None] = "data",
         stat_functions: Mapping[str, Callable[..., float]] | None = None,
@@ -91,6 +94,11 @@ class VolumetricParcellator:
             ``0.0``, which preserves the original behaviour of including every
             non-zero voxel. Use values in [0, 1] for probability maps (e.g.
             ``0.5`` to keep only voxels with >50 % gray-matter probability).
+        atlas_threshold : float, optional
+            Threshold for probabilistic (4D) atlas volumes. Voxels with probability
+            strictly greater than this value are included in each region's mask.
+            Default is ``0.0`` (any non-zero probability voxel is included). Only
+            used when the atlas image is 4D. Ignored for 3D discrete atlases.
         background_label : int, optional
             Label value to treat as background, by default 0
         resampling_target : Literal["data", "labels", None], optional
@@ -101,10 +109,12 @@ class VolumetricParcellator:
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
         self.mask_threshold = float(mask_threshold)
+        self.atlas_threshold = float(atlas_threshold)
         self.mask = self._load_mask(mask) if mask is not None else None
         self.background_label = int(background_label)
         self.resampling_target = resampling_target
         self._atlas_data = self._load_atlas_data()
+        self._is_probabilistic = self._atlas_data.ndim == 4
         self._regions = self._build_regions(labels)
         self._stat_functions = self._prepare_stat_functions(stat_functions)
         self._fitted_scalar_id: str | int | None = None
@@ -148,6 +158,8 @@ class VolumetricParcellator:
                 return list(labels)
         if self.lut is not None:
             return self.lut["index"].tolist()
+        if self._atlas_data.ndim == 4:
+            return list(range(1, self._atlas_data.shape[3] + 1))
         return list(np.unique(self._atlas_data[self._atlas_data != self.background_label]).astype(int))
 
     def _load_atlas_lut(self, lut: pd.DataFrame | str | Path) -> pd.DataFrame:
@@ -193,7 +205,10 @@ class VolumetricParcellator:
         """
         atlas_data = np.asarray(self._prepared_atlas_img.get_fdata())
         mask_data = np.asarray(self._prepared_mask.get_fdata()) > self.mask_threshold
-        atlas_data[~mask_data] = self.background_label
+        if atlas_data.ndim == 4:
+            atlas_data[~mask_data] = 0.0
+        else:
+            atlas_data[~mask_data] = self.background_label
         return nib.Nifti1Image(atlas_data, self._prepared_atlas_img.affine, self._prepared_atlas_img.header)
 
     def _prepare_map(
@@ -234,14 +249,17 @@ class VolumetricParcellator:
             Optional labels provided by the user.
         """
         atlas_ids = set(self._get_labels(labels))
-        atlas_ids.discard(self.background_label)
+        if not self._is_probabilistic:
+            atlas_ids.discard(self.background_label)
         return tuple(sorted(atlas_ids))
 
     def _load_atlas_data(self) -> np.ndarray:
         atlas_data = np.asarray(self.atlas_img.get_fdata())
-        if atlas_data.ndim != 3:
-            raise AtlasShapeError()
-        return atlas_data.astype(int)
+        if atlas_data.ndim == 3:
+            return atlas_data.astype(int)
+        elif atlas_data.ndim == 4:
+            return atlas_data.astype(np.float32)
+        raise AtlasShapeError(ndim=atlas_data.ndim)
 
     def _prepare_stat_functions(
         self,
@@ -309,7 +327,8 @@ class VolumetricParcellator:
         # Cache atlas resampling by reference image identity (optimization 4.2)
         ref_id = id(ref_img)
         if not hasattr(self, "_cached_atlas_ref_id") or self._cached_atlas_ref_id != ref_id:
-            self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation="nearest")
+            atlas_interpolation = "continuous" if self._is_probabilistic else "nearest"
+            self._prepared_atlas_img = self._prepare_map(self.atlas_img, ref_img, interpolation=atlas_interpolation)
             self._cached_atlas_ref_id = ref_id
             # Reset mask cache when atlas cache is invalidated
             if hasattr(self, "_cached_mask_ref_id"):
@@ -354,7 +373,10 @@ class VolumetricParcellator:
             )
 
         scalar_data = np.asarray(prepared_scalar_img.get_fdata())
-        atlas_data = np.asarray(self._prepared_atlas_img.get_fdata()).astype(int)
+        if self._is_probabilistic:
+            atlas_data = np.asarray(self._prepared_atlas_img.get_fdata())
+        else:
+            atlas_data = np.asarray(self._prepared_atlas_img.get_fdata()).astype(int)
         if self.lut is not None:
             result = self.lut.copy()
         else:
@@ -367,7 +389,12 @@ class VolumetricParcellator:
             if region_id not in valid_region_ids:
                 logger.warning("Region ID %d not found in LUT; skipping.", region_id)
                 continue
-            parcel_mask = atlas_data == region_id
+            if self._is_probabilistic:
+                vol_idx = region_id - 1  # 1-based LUT index → 0-based volume index
+                prob_map = atlas_data[:, :, :, vol_idx]
+                parcel_mask = prob_map > self.atlas_threshold
+            else:
+                parcel_mask = atlas_data == region_id
             parcel_values = scalar_data[parcel_mask]
 
             region_stats = {}

@@ -419,6 +419,7 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
             lut=None,
             mask=None,
             mask_threshold=0.0,
+            atlas_threshold=0.0,
             background_label=0,
             resampling_target="data",
         ) -> None:
