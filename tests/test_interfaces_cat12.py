@@ -360,6 +360,7 @@ class DummyParcellator:
         atlas_img,
         lut=None,
         mask=None,
+        mask_threshold=0.0,
         background_label=0,
         resampling_target="data",
     ) -> None:

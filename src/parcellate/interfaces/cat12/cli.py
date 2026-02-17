@@ -49,6 +49,7 @@ ENV_ATLAS_NAMES = "CAT12_ATLAS_NAMES"
 ENV_ATLAS_LUTS = "CAT12_ATLAS_LUTS"
 ENV_ATLAS_SPACE = "CAT12_ATLAS_SPACE"
 ENV_MASK = "CAT12_MASK"
+ENV_MASK_THRESHOLD = "MASKING_THRESHOLD"
 ENV_WORKERS = "CAT12_WORKERS"
 ENV_LOG_LEVEL = "CAT12_LOG_LEVEL"
 
@@ -186,7 +187,8 @@ def config_from_env() -> Cat12Config:
     - CAT12_ATLAS_NAMES: Comma-separated list of atlas names
     - CAT12_ATLAS_LUTS: Comma-separated list of atlas LUT paths
     - CAT12_ATLAS_SPACE: Space for all atlases (default: MNI152NLin2009cAsym)
-    - CAT12_MASK: Path to brain mask (optional)
+    - CAT12_MASK: Path to brain mask or builtin name (optional)
+    - MASKING_THRESHOLD: Mask threshold float value (default: 0.0)
     - CAT12_LOG_LEVEL: Logging level (default: INFO)
 
     Returns
@@ -210,6 +212,8 @@ def config_from_env() -> Cat12Config:
 
     mask = os.getenv(ENV_MASK)
     # mask = Path(mask_str).expanduser().resolve() if mask_str else None
+    mask_threshold_str = os.getenv(ENV_MASK_THRESHOLD)
+    mask_threshold = float(mask_threshold_str) if mask_threshold_str else 0.0
 
     atlases = _parse_atlases_from_env()
     log_level = _parse_log_level(os.getenv(ENV_LOG_LEVEL))
@@ -219,6 +223,7 @@ def config_from_env() -> Cat12Config:
         output_dir=output_dir,
         atlases=atlases,
         mask=mask,
+        mask_threshold=mask_threshold,
         log_level=log_level,
     )
 
@@ -393,7 +398,8 @@ Environment Variables:
   CAT12_ATLAS_NAMES   Comma-separated list of atlas names
   CAT12_ATLAS_LUTS    Comma-separated list of atlas LUT paths
   CAT12_ATLAS_SPACE   Space for all atlases (default: MNI152NLin2009cAsym)
-  CAT12_MASK          Path to brain mask
+  CAT12_MASK          Path to brain mask or builtin name (gm, wm, brain)
+  MASKING_THRESHOLD   Mask threshold (float, default: 0.0); voxels with mask value > threshold are included
   CAT12_WORKERS       Number of parallel workers
   CAT12_LOG_LEVEL     Logging level (DEBUG, INFO, WARNING, ERROR)
 
@@ -555,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
             subjects=config.subjects,
             sessions=config.sessions,
             mask=config.mask,
+            mask_threshold=config.mask_threshold,
             force=config.force,
             log_level=config.log_level,
         )
@@ -567,6 +574,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
             subjects=config.subjects,
             sessions=config.sessions,
             mask=config.mask,
+            mask_threshold=config.mask_threshold,
             force=config.force,
             log_level=config.log_level,
         )
@@ -579,6 +587,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
             subjects=config.subjects,
             sessions=config.sessions,
             mask=config.mask,
+            mask_threshold=config.mask_threshold,
             force=True,
             log_level=config.log_level,
         )
@@ -605,6 +614,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
             subjects=config.subjects,
             sessions=config.sessions,
             mask=config.mask,
+            mask_threshold=config.mask_threshold,
             force=config.force,
             log_level=config.log_level,
         )

@@ -30,6 +30,7 @@ class ParcellationConfig:
     subjects: list[str] | None = None
     sessions: list[str] | None = None
     mask: Path | str | None = None
+    mask_threshold: float = 0.0
     background_label: int = 0
     resampling_target: str | None = "data"
     force: bool = False
