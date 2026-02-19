@@ -65,3 +65,61 @@ Use ``resampling_target`` to control how atlases and scalar maps are aligned:
 - ``None`` keeps both images on their native grids; set this only when inputs already align.
 
 The helper methods :meth:`parcellate.parcellation.volume.VolumetricParcellator._prepare_map` and :meth:`parcellate.parcellation.volume.VolumetricParcellator._apply_mask_to_atlas` encapsulate the resampling steps and mask application, ensuring consistent background handling via ``background_label``.
+
+## Probabilistic (4D) atlases
+
+Some atlases encode each region as a continuous probability map in a separate 3D volume, rather than assigning a single integer label per voxel. Examples include XTRACT white-matter tracts and the Harvard-Oxford cortical atlas. ``parcellate`` handles these natively — just pass the 4D NIfTI and the API stays the same.
+
+**How it works**
+
+Each volume in the 4D image corresponds to one region. Volume index 0 (zero-based) maps to region index 1 (one-based) in the output table, volume 1 maps to region 2, and so on. Within each volume, voxels whose probability is strictly greater than ``atlas_threshold`` are included in that region's statistics, so voxels can belong to more than one region simultaneously.
+
+**Parameters**
+
+- ``atlas_threshold`` (float, default ``0.0``) — minimum probability to include a voxel. The comparison is strict (``>``), so a voxel with probability exactly equal to the threshold is excluded. Set to ``0.0`` to include every non-zero voxel.
+
+**Output filename entity**
+
+When ``atlas_threshold > 0``, the value is embedded in the output filename as the BIDS-style entity ``atlasthr-<value>`` (e.g., ``atlasthr-0.25``). The entity is omitted when the threshold is zero.
+
+```python
+from parcellate import VolumetricParcellator
+
+# 4D probabilistic atlas — detected automatically
+parcellator = VolumetricParcellator(
+    atlas_img="xtract_tracts.nii.gz",
+    lut="xtract_lut.tsv",
+    atlas_threshold=0.25,  # keep only high-confidence voxels
+)
+parcellator.fit("subject_FA.nii.gz")
+regional_stats = parcellator.transform("subject_FA.nii.gz")
+# regional_stats contains one row per tract (region)
+```
+
+## Mask thresholding
+
+When supplying a probabilistic brain mask (e.g., a grey-matter partial-volume estimate), you may want to restrict the analysis to voxels with a high tissue probability rather than any non-zero value.
+
+**Parameters**
+
+- ``mask_threshold`` (float, default ``0.0``) — minimum mask value to keep a voxel. Strict ``>`` comparison; voxels equal to the threshold are excluded. The default of ``0.0`` preserves the pre-v0.2.0 behaviour of including all non-zero mask voxels.
+
+**Output filename entity**
+
+When ``mask_threshold > 0``, the value appears as ``maskthr-<value>`` in the output filename. The entity is omitted when the threshold is zero.
+
+**Environment variable**
+
+When using the ``parcellate-cat12`` standalone CLI, set ``MASKING_THRESHOLD`` to supply the threshold without editing config files.
+
+```python
+from parcellate import VolumetricParcellator
+
+parcellator = VolumetricParcellator(
+    atlas_img="atlas.nii.gz",
+    mask="gm",           # MNI152 grey-matter probability map
+    mask_threshold=0.5,  # include only voxels where GM probability > 0.5
+)
+parcellator.fit("subject_T1w.nii.gz")
+regional_stats = parcellator.transform("subject_T1w.nii.gz")
+```

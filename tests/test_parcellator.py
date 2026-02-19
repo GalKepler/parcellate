@@ -661,6 +661,13 @@ def test_probabilistic_default_threshold_zero() -> None:
     assert r1["voxel_count"] == 2  # both non-zero voxels included
 
 
+def test_probabilistic_atlas_threshold_attribute() -> None:
+    """atlas_threshold is stored and accessible as an attribute."""
+    atlas_img = _prob_atlas_2x2x2x2()
+    vp = VolumetricParcellator(atlas_img, atlas_threshold=0.25)
+    assert vp.atlas_threshold == pytest.approx(0.25)
+
+
 def test_3d_atlas_unaffected() -> None:
     """Existing 3D discrete atlas behaviour is unchanged by the 4D feature."""
     atlas_img = _atlas()
