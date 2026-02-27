@@ -355,16 +355,7 @@ def test_scalar_map_space_mismatch_error_message() -> None:
 
 
 class DummyParcellator:
-    def __init__(
-        self,
-        atlas_img,
-        lut=None,
-        mask=None,
-        mask_threshold=0.0,
-        atlas_threshold=0.0,
-        background_label=0,
-        resampling_target="data",
-    ) -> None:
+    def __init__(self, atlas_img, **kwargs) -> None:
         pass
 
     def fit(self, scalar_img) -> None:

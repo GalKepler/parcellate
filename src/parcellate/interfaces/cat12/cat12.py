@@ -89,6 +89,7 @@ def load_config(args: argparse.Namespace) -> Cat12Config:
     log_level = _parse_log_level(args.log_level or data.get("log_level"))
     n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
     n_procs = args.n_procs or int(data.get("n_procs", 1))
+    stat_tier = getattr(args, "stat_tier", None) or data.get("stat_tier") or None
 
     return Cat12Config(
         input_root=input_root,
@@ -102,6 +103,7 @@ def load_config(args: argparse.Namespace) -> Cat12Config:
         log_level=log_level,
         n_jobs=n_jobs,
         n_procs=n_procs,
+        stat_tier=stat_tier,
     )
 
 
@@ -410,6 +412,18 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
         "--config",
         type=Path,
         help="Path to a TOML configuration file.",
+    )
+    parser.add_argument(
+        "--stat-tier",
+        dest="stat_tier",
+        choices=["core", "extended", "diagnostic", "all"],
+        default=None,
+        help=(
+            "Named statistics tier to compute. "
+            "'core': mean/std/median/volume/voxel_count/sum (fastest). "
+            "'extended': core + robust estimates and shape descriptors. "
+            "'diagnostic'/'all': all 45 built-in statistics (default)."
+        ),
     )
 
 

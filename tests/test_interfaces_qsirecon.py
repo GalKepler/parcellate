@@ -413,16 +413,7 @@ def test_runner_creates_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     calls: list[Path] = []
 
     class DummyParcellator:
-        def __init__(
-            self,
-            atlas_img,
-            lut=None,
-            mask=None,
-            mask_threshold=0.0,
-            atlas_threshold=0.0,
-            background_label=0,
-            resampling_target="data",
-        ) -> None:
+        def __init__(self, atlas_img, **kwargs) -> None:
             calls.append(Path(atlas_img))
 
         def fit(self, scalar_img) -> None:
