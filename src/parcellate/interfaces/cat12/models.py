@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 
 from parcellate.interfaces.models import (
     AtlasDefinition,
@@ -40,12 +39,7 @@ class ScalarMapDefinition(ScalarMapBase):
 
 @dataclass
 class Cat12Config(ParcellationConfig):
-    """Configuration for CAT12 parcellation workflow.
-
-    Inherits from ParcellationConfig with a different default for mask.
-    """
-
-    mask: Path | str | None = "gm"  # Override: CAT12 defaults to gray matter mask
+    """Configuration for CAT12 parcellation workflow."""
 
 
 __all__ = [
