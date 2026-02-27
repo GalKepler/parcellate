@@ -1,5 +1,10 @@
 """Command-line interface for CAT12 parcellation.
 
+.. deprecated::
+    The ``parcellate-cat12`` CSV-based CLI is deprecated and will be removed in a
+    future major release.  Use ``parcellate cat12 config.toml`` (the TOML-based
+    unified CLI) instead.
+
 This module provides a CLI that can:
 - Read subject/session information from a CSV file
 - Load configuration from environment variables or .env file
@@ -12,6 +17,7 @@ import argparse
 import logging
 import os
 import sys
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -513,6 +519,12 @@ Example .env file:
 
 def main(argv: list[str] | None = None) -> int:  # noqa: C901
     """Entry point for CLI execution."""
+    warnings.warn(
+        "The 'parcellate-cat12' command is deprecated and will be removed in a future release. "
+        "Use 'parcellate cat12 config.toml' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
