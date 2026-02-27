@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
+    import tomli as tomllib  # type: ignore[import]
 
 import pandas as pd
 
@@ -25,16 +31,17 @@ from parcellate.interfaces.models import ParcellationOutput
 from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
 from parcellate.interfaces.shared import (
-    add_cli_args,
     build_pending_plan,
-    load_config_base,
-    run_parallel_workflow,
     write_output,
 )
 from parcellate.interfaces.utils import (
+    _as_list,
     _atlas_threshold_label,
     _mask_label,
     _mask_threshold_label,
+    _parse_log_level,
+    _parse_mask,
+    parse_atlases,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -297,13 +304,13 @@ def run_parcellations(config: Cat12Config) -> list[Path]:
     return outputs
 
 
-def add_cli_args(parser: argparse.ArgumentParser) -> None:
+def add_cli_args(parser: argparse.ArgumentParser, input_help: str = "Root directory of CAT12 derivatives.") -> None:
     """Add CLI arguments to the parser."""
 
     parser.add_argument(
         "--input-root",
         type=Path,
-        help="Root directory of CAT12 derivatives.",
+        help=input_help,
     )
     parser.add_argument(
         "--output-dir",

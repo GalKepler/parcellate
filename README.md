@@ -2,7 +2,7 @@
 
 [![Build status](https://img.shields.io/github/actions/workflow/status/GalKepler/parcellate/main.yml?branch=main)](https://github.com/GalKepler/parcellate/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/GalKepler/parcellate/branch/main/graph/badge.svg)](https://codecov.io/gh/GalKepler/parcellate)
-[![Documentation](https://readthedocs.org/projects/neuroparcellate/badge/?version=latest)](https://neuroparcellate.readthedocs.io/en/latest/?version=latest)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://GalKepler.github.io/parcellate/)
 [![License](https://img.shields.io/github/license/GalKepler/parcellate)](https://img.shields.io/github/license/GalKepler/parcellate)
 
 > Extract regional statistics from scalar neuroimaging maps using atlas-based parcellation.
@@ -90,7 +90,7 @@ parcellate /data/qsirecon_derivatives /data/parcellations participant \
 | `--n-jobs N` | Within-subject parallelism |
 | `--n-procs N` | Across-subject parallelism |
 
-See the [CLI reference](https://neuroparcellate.readthedocs.io/en/latest/cli_reference.html) for the full list of flags.
+See the [CLI reference](https://GalKepler.github.io/parcellate/cli_reference/) for the full list of flags.
 
 ### Legacy interface (deprecated)
 
@@ -131,7 +131,7 @@ space           = "MNI152NLin2009cAsym"       # Template space
 atlas_threshold = 0.0                         # For 4D atlases: minimum voxel probability
 ```
 
-For the full configuration reference, see the [Configuration reference](https://neuroparcellate.readthedocs.io/en/latest/configuration.html).
+For the full configuration reference, see the [Configuration reference](https://GalKepler.github.io/parcellate/configuration/).
 
 ## Output Format
 
@@ -162,7 +162,7 @@ A JSON sidecar (`.json`) is written alongside each TSV with full provenance (atl
 
 **Diagnostic adds:** normality tests (Shapiro-Wilk, D'Agostino K²), outlier proportions, tail mass, entropy, boolean QC flags
 
-See the full [Metrics reference](https://neuroparcellate.readthedocs.io/en/latest/metrics_reference.html) for descriptions of all 45 statistics.
+See the full [Metrics reference](https://GalKepler.github.io/parcellate/metrics_reference/) for descriptions of all 45 statistics.
 
 ## Python API
 

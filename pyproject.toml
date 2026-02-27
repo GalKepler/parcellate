@@ -39,6 +39,11 @@ Repository = "https://github.com/GalKepler/parcellate"
 Documentation = "https://GalKepler.github.io/parcellate/"
 
 [dependency-groups]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
 dev = [
     "pytest>=7.2.0",
     "pytest-mock>=3.6.1",

@@ -1,0 +1,70 @@
+site_name: parcellate
+site_url: https://GalKepler.github.io/parcellate/
+repo_name: GalKepler/parcellate
+repo_url: https://github.com/GalKepler/parcellate
+site_description: A BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: source
+            docstring_style: numpy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.inlinehilite
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting_started.md
+  - Pipeline guides:
+      - CAT12: cat12_guide.md
+      - QSIRecon: qsirecon_guide.md
+  - Reference:
+      - CLI reference: cli_reference.md
+      - Metrics reference: metrics_reference.md
+      - Configuration: configuration.md
+      - Usage guide: usage.md
+      - Troubleshooting: troubleshooting.md
+      - API: api.md

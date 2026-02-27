@@ -1,14 +1,14 @@
 # Usage guide
 
-The :class:`parcellate.parcellation.volume.VolumetricParcellator` orchestrates atlas handling, resampling, and statistic computation. This page outlines the most common workflows.
+The `VolumetricParcellator` orchestrates atlas handling, resampling, and statistic computation. This page outlines the most common workflows.
 
 ## Working with atlases and lookup tables
 
 You can provide atlas metadata in multiple ways:
 
-- **Lookup table**: pass a TSV file or :class:`pandas.DataFrame` with ``index`` and ``label`` columns. Missing columns raise a :class:`parcellate.parcellation.volume.MissingLUTColumnsError`.
-- **Custom label selection**: supply a list or mapping of label IDs via ``labels`` to restrict the analysis to specific parcels.
-- **Built-in masks**: set ``mask="gm"``, ``"wm"``, or ``"brain"`` to leverage MNI152 tissue masks from :mod:`nilearn`. Custom mask images are also supported.
+- **Lookup table**: pass a TSV file or `pandas.DataFrame` with `index` and `label` columns. Missing columns raise a `MissingLUTColumnsError`.
+- **Custom label selection**: supply a list or mapping of label IDs via `labels` to restrict the analysis to specific parcels.
+- **Built-in masks**: set `mask="gm"`, `"wm"`, or `"brain"` to leverage MNI152 tissue masks from nilearn. Custom mask images are also supported.
 
 ```python
 from parcellate import VolumetricParcellator
@@ -34,7 +34,7 @@ print(regional_stats.columns)
 # index, label, volume_mm3, voxel_count, mean, std, ...
 ```
 
-If ``transform`` is called before ``fit``, a :class:`parcellate.parcellation.volume.ParcellatorNotFittedError` is raised to prevent accidental misuse.
+If `transform` is called before `fit`, a `ParcellatorNotFittedError` is raised to prevent accidental misuse.
 
 ## Selecting a statistics tier
 
@@ -89,7 +89,7 @@ Use ``resampling_target`` to control how atlases and scalar maps are aligned:
 - ``"labels"`` resamples scalar maps to the atlas grid, preserving atlas topology at the cost of interpolating intensities.
 - ``None`` keeps both images on their native grids; set this only when inputs already align.
 
-The helper methods :meth:`parcellate.parcellation.volume.VolumetricParcellator._prepare_map` and :meth:`parcellate.parcellation.volume.VolumetricParcellator._apply_mask_to_atlas` encapsulate the resampling steps and mask application, ensuring consistent background handling via ``background_label``.
+The helper methods `_prepare_map` and `_apply_mask_to_atlas` encapsulate the resampling steps and mask application, ensuring consistent background handling via `background_label`.
 
 ## Probabilistic (4D) atlases
 
