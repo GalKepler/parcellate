@@ -97,16 +97,16 @@ class TestMainCLI:
 
             assert result == 1
 
-    def test_invalid_subcommand_returns_error(self, capsys) -> None:
-        """Test invalid subcommand raises SystemExit."""
-        # argparse raises SystemExit for invalid commands
+    def test_no_pipeline_flag_returns_error(self, capsys) -> None:
+        """Test missing --pipeline flag raises SystemExit with error code 2."""
+        # When bids_dir/output_dir/analysis_level are provided but --pipeline is missing,
+        # argparse exits with code 2.
         with pytest.raises(SystemExit) as exc_info:
-            main(["invalid_command"])
+            main(["/bids", "/out", "participant"])
 
-        # Should exit with error code 2 (argparse error)
         assert exc_info.value.code == 2
         captured = capsys.readouterr()
-        assert "invalid" in captured.err.lower()
+        assert "--pipeline" in captured.err.lower() or "required" in captured.err.lower()
 
     def test_cat12_preserves_arguments(self) -> None:
         """Test cat12 subcommand calls main function."""
@@ -139,3 +139,94 @@ class TestMainCLI:
             passed_args = mock_main.call_args[0][0]
             assert "--config" in passed_args
             assert "config.toml" in passed_args
+
+
+class TestBIDSAppCLI:
+    """Tests for the new BIDS App-style CLI interface."""
+
+    def test_bids_app_cat12_dispatches_correctly(self, tmp_path) -> None:
+        """Test BIDS App positional args with --pipeline cat12 dispatches to cat12."""
+        bids_dir = tmp_path / "bids"
+        out_dir = tmp_path / "out"
+        bids_dir.mkdir()
+
+        with (
+            patch("parcellate.interfaces.cat12.cat12.load_config") as mock_config,
+            patch("parcellate.interfaces.cat12.cat12.run_parcellations") as mock_run,
+        ):
+            mock_run.return_value = []
+            result = main([str(bids_dir), str(out_dir), "participant", "--pipeline", "cat12"])
+
+        assert result == 0
+        mock_config.assert_called_once()
+        mock_run.assert_called_once()
+
+    def test_bids_app_qsirecon_dispatches_correctly(self, tmp_path) -> None:
+        """Test BIDS App positional args with --pipeline qsirecon dispatches to qsirecon."""
+        bids_dir = tmp_path / "bids"
+        out_dir = tmp_path / "out"
+        bids_dir.mkdir()
+
+        with (
+            patch("parcellate.interfaces.qsirecon.qsirecon.load_config") as mock_config,
+            patch("parcellate.interfaces.qsirecon.qsirecon.run_parcellations") as mock_run,
+        ):
+            mock_run.return_value = []
+            result = main([str(bids_dir), str(out_dir), "participant", "--pipeline", "qsirecon"])
+
+        assert result == 0
+        mock_config.assert_called_once()
+        mock_run.assert_called_once()
+
+    def test_bids_app_participant_labels_passed(self, tmp_path) -> None:
+        """Test --participant-label translates to subjects in config namespace."""
+        from parcellate.cli import _build_bids_parser, _to_pipeline_namespace
+
+        parser = _build_bids_parser()
+        args = parser.parse_args([
+            str(tmp_path),
+            str(tmp_path),
+            "participant",
+            "--pipeline",
+            "cat12",
+            "--participant-label",
+            "01",
+            "02",
+        ])
+        pipeline_ns = _to_pipeline_namespace(args)
+        assert pipeline_ns.subjects == ["01", "02"]
+
+    def test_bids_app_session_label_passed(self, tmp_path) -> None:
+        """Test --session-label translates to sessions in config namespace."""
+        from parcellate.cli import _build_bids_parser, _to_pipeline_namespace
+
+        parser = _build_bids_parser()
+        args = parser.parse_args([
+            str(tmp_path),
+            str(tmp_path),
+            "participant",
+            "--pipeline",
+            "cat12",
+            "--session-label",
+            "ses-01",
+        ])
+        pipeline_ns = _to_pipeline_namespace(args)
+        assert pipeline_ns.sessions == ["ses-01"]
+
+    def test_bids_app_bids_dir_maps_to_input_root(self, tmp_path) -> None:
+        """Test bids_dir positional arg maps to input_root in pipeline namespace."""
+        from parcellate.cli import _build_bids_parser, _to_pipeline_namespace
+
+        parser = _build_bids_parser()
+        args = parser.parse_args([str(tmp_path), str(tmp_path), "participant", "--pipeline", "cat12"])
+        pipeline_ns = _to_pipeline_namespace(args)
+        assert pipeline_ns.input_root == tmp_path
+
+    def test_legacy_subcommand_emits_deprecation_warning(self) -> None:
+        """Test that legacy subcommand mode emits a DeprecationWarning."""
+        with (
+            patch("parcellate.interfaces.cat12.cat12.main") as mock_main,
+            pytest.warns(DeprecationWarning, match="deprecated"),
+        ):
+            mock_main.return_value = 0
+            main(["cat12", "--help"])
