@@ -36,9 +36,34 @@ print(regional_stats.columns)
 
 If ``transform`` is called before ``fit``, a :class:`parcellate.parcellation.volume.ParcellatorNotFittedError` is raised to prevent accidental misuse.
 
+## Selecting a statistics tier
+
+``parcellate`` ships with 45 built-in statistics organized into named **tiers**. Use `stat_tier` to control how many are computed:
+
+| Tier | Statistics | Use case |
+|------|-----------|----------|
+| `core` | 6 | Fast exploration, large cohorts |
+| `extended` | 21 | Production pipelines |
+| `diagnostic` (default) | 45 | Quality control, distribution inspection |
+
+```python
+from parcellate import VolumetricParcellator
+
+parcellator = VolumetricParcellator(
+    atlas_img="atlas.nii.gz",
+    lut="atlas_lut.tsv",
+    stat_tier="extended",  # 21 statistics
+)
+parcellator.fit("subject_T1w.nii.gz")
+df = parcellator.transform("subject_T1w.nii.gz")
+# df has columns: index, label, mean, std, median, volume_mm3, ...
+```
+
+For a full description of every statistic, see the [Metrics reference](metrics_reference.md).
+
 ## Customizing statistics
 
-``parcellate`` ships with robust defaults defined in :mod:`parcellate.metrics.volume`, including volume (``mm³``), voxel count, trimmed means, and robust dispersion estimators. Supply your own mapping of statistic names to callables to extend or replace the defaults:
+Supply your own mapping of statistic names to callables to extend or replace the defaults. When ``stat_functions`` is provided it takes precedence over ``stat_tier``.
 
 ```python
 import numpy as np
@@ -54,7 +79,7 @@ parcellator = VolumetricParcellator(
 )
 ```
 
-Each statistic receives the parcel's voxel values. To access the scalar image (for example, to compute voxel volume), set ``requires_image=True`` on a :class:`parcellate.metrics.base.Statistic` instance.
+Each statistic receives the parcel's voxel values as a 1-D NumPy array. To access the scalar image (for example, to compute voxel volume), set ``requires_image=True`` on a :class:`parcellate.metrics.base.Statistic` instance.
 
 ## Resampling behavior
 

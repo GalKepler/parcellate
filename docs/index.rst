@@ -3,7 +3,7 @@
 Welcome to parcellate's documentation!
 ======================================
 
-``parcellate`` is a lightweight toolkit for computing parcel-wise statistics from 3D neuroimaging volumes. It pairs a volumetric atlas with scalar maps, handles resampling, and produces tidy tables of region-level measurements suitable for downstream analysis and quality control.
+``parcellate`` is a BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation. It integrates with **CAT12** (VBM) and **QSIRecon** (dMRI) preprocessing pipelines and produces tidy TSV tables suitable for downstream analysis and quality control.
 
 .. grid:: 1 2 2 2
    :gutter: 2
@@ -16,6 +16,20 @@ Welcome to parcellate's documentation!
 
       Install the package, configure your environment, and run your first parcellation.
 
+   .. grid-item-card:: CAT12 guide
+      :link: cat12_guide
+      :link-type: doc
+      :text-align: center
+
+      Process CAT12 VBM outputs: input layout, output format, masking, and TIV.
+
+   .. grid-item-card:: QSIRecon guide
+      :link: qsirecon_guide
+      :link-type: doc
+      :text-align: center
+
+      Process QSIRecon diffusion outputs including 4D probabilistic atlases.
+
    .. grid-item-card:: API reference
       :link: api
       :link-type: doc
@@ -23,22 +37,26 @@ Welcome to parcellate's documentation!
 
       Explore the VolumetricParcellator and the built-in statistical functions.
 
-   .. grid-item-card:: Usage guide
-      :link: usage
-      :link-type: doc
-      :text-align: center
+.. toctree::
+   :maxdepth: 2
+   :caption: Getting started
 
-      Learn how to customize atlases, lookup tables, and summary statistics.
+   getting_started
 
 .. toctree::
    :maxdepth: 2
-   :caption: User guide
+   :caption: Pipeline guides
 
-   getting_started
-   usage
+   cat12_guide
+   qsirecon_guide
 
 .. toctree::
    :maxdepth: 2
    :caption: Reference
 
+   cli_reference
+   metrics_reference
+   configuration
+   usage
+   troubleshooting
    api

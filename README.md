@@ -13,9 +13,9 @@
 
 **Key Features:**
 - 🧠 **Multiple Pipeline Support**: Integrates with CAT12 (VBM) and QSIRecon (diffusion MRI) outputs
-- 📊 **Rich Statistics**: 13+ built-in metrics including mean, median, volume, robust statistics, and higher-order moments
+- 📊 **Rich Statistics**: 45 built-in metrics in three tiers (core / extended / diagnostic), including robust statistics, higher-order moments, and normality tests
 - ⚡ **Performance**: Parallel processing, smart caching, and optimized resampling
-- 📁 **BIDS-Compatible**: Outputs follow BIDS-derivative conventions
+- 📁 **BIDS App**: Follows [BIDS App](https://bids-apps.neuroimaging.io/) positional-argument conventions
 - 🔧 **Flexible**: Python API and CLI interfaces, custom atlases and statistics
 
 **Supported Input Formats:**
@@ -39,86 +39,67 @@ pip install parcellate[dotenv]
 
 ## Quick Start
 
-### CAT12 Pipeline
+### BIDS App interface (recommended)
 
-Process CAT12 VBM outputs with a TOML configuration file:
+`parcellate` follows the [BIDS App](https://bids-apps.neuroimaging.io/) convention:
 
-```bash
-parcellate cat12 config.toml
+```
+parcellate <bids_dir> <output_dir> participant --pipeline {cat12,qsirecon} --config config.toml
 ```
 
-**Example config.toml:**
-```toml
-input_root = "/data/cat12_derivatives"
-output_dir = "/data/parcellations"
-subjects = ["sub-01", "sub-02"]  # Optional: process specific subjects
-force = false                     # Skip existing outputs
-log_level = "INFO"
-n_jobs = 4                        # Parallel jobs within subject
-n_procs = 2                       # Parallel processes across subjects
+Create a minimal TOML file with your atlas definitions:
 
+```toml
+# config.toml
 [[atlases]]
-name = "Schaefer400"
-path = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
-lut = "/atlases/Schaefer2018_400Parcels_7Networks_order.tsv"
+name  = "schaefer400"
+path  = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
+lut   = "/atlases/Schaefer2018_400Parcels_7Networks_order_FSLMNI152.tsv"
 space = "MNI152NLin2009cAsym"
 ```
 
-**Example output:**
-```
-parcellations/
-└── sub-01/
-    └── anat/
-        ├── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-gm_stats.tsv
-        ├── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-wm_stats.tsv
-        └── sub-01_space-MNI152NLin2009cAsym_atlas-Schaefer400_desc-ct_stats.tsv
-```
-
-### QSIRecon Pipeline
-
-Process QSIRecon diffusion outputs:
+#### CAT12
 
 ```bash
-parcellate qsirecon --config config.toml --input-root /data/qsirecon
+parcellate /data/cat12_derivatives /data/parcellations participant \
+    --pipeline cat12 \
+    --config config.toml \
+    --stat-tier extended
 ```
 
-**Example config.toml:**
-```toml
-input_root = "/data/qsirecon_derivatives"
-output_dir = "/data/parcellations"
-sessions = ["ses-01"]
-n_jobs = 4
-
-[[atlases]]
-name = "JHU"
-path = "/atlases/JHU-ICBM-labels-1mm.nii.gz"
-lut = "/atlases/JHU-ICBM-labels-1mm.tsv"
-space = "MNI152NLin6Asym"
-```
-
-### CAT12 CSV Mode (Batch Processing)
-
-Process multiple subjects from a CSV file:
+#### QSIRecon
 
 ```bash
-parcellate-cat12 subjects.csv --root /data/cat12 --atlas-path /atlases/schaefer400.nii.gz
+parcellate /data/qsirecon_derivatives /data/parcellations participant \
+    --pipeline qsirecon \
+    --config config.toml \
+    --stat-tier core \
+    --n-procs 4
 ```
 
-**Example subjects.csv:**
-```csv
-subject_id,session_id
-sub-01,ses-baseline
-sub-02,ses-baseline
-```
+#### Common options
 
-Environment variables can be used for configuration:
+| Flag | Description |
+|------|-------------|
+| `--participant-label 01 02` | Process only these subjects |
+| `--session-label ses-01` | Process only this session |
+| `--mask gm` / `--mask /path/to/mask.nii.gz` | Brain mask (CAT12 default: `gm`) |
+| `--mask-threshold 0.5` | Minimum mask probability |
+| `--stat-tier core\|extended\|diagnostic` | Statistics tier (default: `diagnostic`) |
+| `--force` | Overwrite existing outputs |
+| `--n-jobs N` | Within-subject parallelism |
+| `--n-procs N` | Across-subject parallelism |
+
+See the [CLI reference](https://neuroparcellate.readthedocs.io/en/latest/cli_reference.html) for the full list of flags.
+
+### Legacy interface (deprecated)
+
+The old subcommand syntax still works but emits a `DeprecationWarning`:
+
 ```bash
-export CAT12_ROOT=/data/cat12_derivatives
-export CAT12_OUTPUT_DIR=/data/parcellations
-export CAT12_ATLAS_PATHS=/atlases/atlas1.nii.gz,/atlases/atlas2.nii.gz
-export CAT12_ATLAS_NAMES=Schaefer400,AAL3
-
-parcellate-cat12 subjects.csv
+# Deprecated — use BIDS App interface above
+parcellate cat12 config.toml
+parcellate qsirecon config.toml
 ```
 
 ## Configuration Reference
@@ -128,12 +109,14 @@ parcellate-cat12 subjects.csv
 | Field | Type | Description | Default |
 |-------|------|-------------|---------|
 | `input_root` | string | Path to preprocessing derivatives | Required |
-| `output_dir` | string | Output directory for parcellations | `{input_root}/parcellations` |
+| `output_dir` | string | Output directory for parcellations | Required |
 | `subjects` | list | Subject IDs to process | All discovered |
 | `sessions` | list | Session IDs to process | All discovered |
-| `mask` | string | Brain mask path or builtin (`gm`, `wm`, `brain`) | None |
+| `mask` | string | Brain mask path or builtin (`gm`, `wm`, `brain`) | `gm` (CAT12) / none (QSIRecon) |
+| `mask_threshold` | float | Minimum mask value to include a voxel | `0.0` |
+| `stat_tier` | string | Statistics tier (`core`, `extended`, `diagnostic`, `all`) | `diagnostic` |
 | `force` | boolean | Overwrite existing outputs | `false` |
-| `log_level` | string | Logging verbosity (`DEBUG`, `INFO`, `WARNING`) | `INFO` |
+| `log_level` | string | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` |
 | `n_jobs` | integer | Parallel jobs within subject | `1` |
 | `n_procs` | integer | Parallel processes across subjects | `1` |
 
@@ -141,68 +124,45 @@ parcellate-cat12 subjects.csv
 
 ```toml
 [[atlases]]
-name = "MyAtlas"           # Atlas identifier
-path = "/path/to/atlas.nii.gz"  # NIfTI file with integer labels
-lut = "/path/to/atlas.tsv"      # Optional: TSV with columns 'index' and 'label'
-space = "MNI152NLin2009cAsym"   # Template space
+name            = "MyAtlas"                   # Atlas identifier
+path            = "/path/to/atlas.nii.gz"     # NIfTI file (3D integer or 4D probabilistic)
+lut             = "/path/to/atlas.tsv"        # Optional: TSV with 'index' and 'label' columns
+space           = "MNI152NLin2009cAsym"       # Template space
+atlas_threshold = 0.0                         # For 4D atlases: minimum voxel probability
 ```
 
-The LUT (lookup table) TSV should have:
-- `index`: Integer region IDs matching atlas labels
-- `label`: Region names
-
-### Environment Variables (CAT12 CSV Mode)
-
-| Variable | Description |
-|----------|-------------|
-| `CAT12_ROOT` | Input root directory (required) |
-| `CAT12_OUTPUT_DIR` | Output directory |
-| `CAT12_ATLAS_PATHS` | Comma-separated atlas paths |
-| `CAT12_ATLAS_NAMES` | Comma-separated atlas names |
-| `CAT12_ATLAS_SPACE` | Space for all atlases |
-| `CAT12_MASK` | Mask path or builtin name |
-| `CAT12_LOG_LEVEL` | Logging level |
+For the full configuration reference, see the [Configuration reference](https://neuroparcellate.readthedocs.io/en/latest/configuration.html).
 
 ## Output Format
 
-Each parcellation produces a TSV file with one row per brain region:
+Each parcellation produces a TSV file with one row per brain region and one column per statistic. The first two columns are always:
 
 | Column | Description |
 |--------|-------------|
-| `index` | Region ID from atlas |
-| `label` | Region name (if LUT provided) |
-| `mean` | Mean intensity |
-| `std` | Standard deviation |
-| `median` | Median intensity |
-| `mad_median` | Median absolute deviation |
-| `min` | Minimum intensity |
-| `max` | Maximum intensity |
-| `range` | Max - Min |
-| `volume` | Sum of intensities |
-| `voxel_count` | Number of voxels in region |
-| `z_filtered_mean` | Mean after removing outliers (|z| > 3) |
-| `z_filtered_std` | Std after removing outliers |
-| `skewness` | Distribution skewness |
-| `kurtosis` | Distribution kurtosis |
+| `index` | Integer region index from the atlas |
+| `label` | Region name from the lookup table |
 
-## Available Statistics
+Subsequent columns contain the computed statistics. Which columns appear depends on the selected `stat_tier`. For CAT12, a `vol_TIV` column is also appended when XML report files are found.
 
-| Statistic | Description | Edge Case Behavior |
-|-----------|-------------|-------------------|
-| `mean` | Arithmetic mean | NaN for empty regions |
-| `std` | Standard deviation | 0 for constant values |
-| `median` | 50th percentile | NaN for empty regions |
-| `mad_median` | Median absolute deviation | Robust alternative to std |
-| `min` / `max` | Extreme values | NaN for empty regions |
-| `range` | Max - Min | 0 for constant values |
-| `volume` | Sum of all values | Region-specific metric |
-| `voxel_count` | Number of non-zero voxels | Proxy for region size |
-| `z_filtered_mean` | Mean excluding |z| > 3 outliers | Robust to outliers |
-| `z_filtered_std` | Std excluding outliers | Robust variance estimate |
-| `iqr_filtered_mean` | Mean excluding IQR outliers | Alternative robust mean |
-| `robust_mean` | MAD-based filtered mean | Highly robust |
-| `skewness` | Asymmetry of distribution | Higher moments |
-| `kurtosis` | Tail heaviness | Outlier sensitivity |
+A JSON sidecar (`.json`) is written alongside each TSV with full provenance (atlas path, mask, thresholds, software version, timestamp).
+
+## Statistics tiers
+
+`parcellate` ships with 45 built-in statistics organized into tiers. Select a tier with `--stat-tier` (CLI) or `stat_tier` (TOML / Python):
+
+| Tier | Count | Typical use |
+|------|-------|------------|
+| `core` | 6 | Fast exploration, large cohorts |
+| `extended` | 21 | Production pipelines |
+| `diagnostic` (default) | 45 | QC, distribution inspection |
+
+**Core statistics:** `mean`, `std`, `median`, `volume_mm3`, `voxel_count`, `sum`
+
+**Extended adds:** robust means (MAD, z-score, IQR filtered), dispersion (`cv`, `robust_cv`), shape (`skewness`, `excess_kurtosis`), key percentiles (5th, 25th, 75th, 95th)
+
+**Diagnostic adds:** normality tests (Shapiro-Wilk, D'Agostino K²), outlier proportions, tail mass, entropy, boolean QC flags
+
+See the full [Metrics reference](https://neuroparcellate.readthedocs.io/en/latest/metrics_reference.html) for descriptions of all 45 statistics.
 
 ## Python API
 
@@ -211,41 +171,35 @@ Use the core parcellation engine directly:
 ```python
 from parcellate import VolumetricParcellator
 import nibabel as nib
-import pandas as pd
-
-# Load atlas
-atlas_img = nib.load("atlas.nii.gz")
-lut = pd.read_csv("atlas.tsv", sep="\t")
 
 # Initialize parcellator
 parcellator = VolumetricParcellator(
-    atlas_img=atlas_img,
-    lut=lut,
-    background_label=0,
-    resampling_target="data"  # Resample to scalar map space
+    atlas_img="atlas.nii.gz",
+    lut="atlas.tsv",
+    mask="gm",                  # built-in MNI152 grey-matter mask
+    stat_tier="extended",       # 21 statistics (default: all 45)
+    resampling_target="data",   # resample atlas to scalar-map space
 )
 
-# Parcellate a scalar map
-scalar_img = nib.load("gm_map.nii.gz")
-parcellator.fit(scalar_img)
-stats = parcellator.transform(scalar_img)
-
+# Fit once, then transform one or more maps
+parcellator.fit("gm_map.nii.gz")
+stats = parcellator.transform("gm_map.nii.gz")
 print(stats.head())
 ```
 
-### Custom Statistics
+### Custom statistics
 
-Define custom aggregation functions:
+Supply a dict of callables to override the built-in statistics entirely:
 
 ```python
-def range_iqr(values):
-    """Interquartile range."""
-    q75, q25 = np.percentile(values[~np.isnan(values)], [75, 25])
-    return q75 - q25
+import numpy as np
 
 parcellator = VolumetricParcellator(
-    atlas_img=atlas_img,
-    stat_functions={"range_iqr": range_iqr}
+    atlas_img="atlas.nii.gz",
+    stat_functions={
+        "iqr": lambda x: float(np.nanpercentile(x, 75) - np.nanpercentile(x, 25)),
+        "q90": lambda x: float(np.nanpercentile(x, 90)),
+    },
 )
 ```
 
