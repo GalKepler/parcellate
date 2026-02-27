@@ -10,34 +10,30 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-try:  # Python 3.11+
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
-    import tomli as tomllib  # type: ignore[import]
-
+from parcellate.interfaces.models import ParcellationOutput
 from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.qsirecon.loader import load_qsirecon_inputs
 from parcellate.interfaces.qsirecon.models import (
     AtlasDefinition,
-    ParcellationOutput,
     QSIReconConfig,
     ReconInput,
     ScalarMapDefinition,
     SubjectContext,
 )
 from parcellate.interfaces.runner import run_parcellation_workflow
+from parcellate.interfaces.shared import (
+    add_cli_args,
+    build_pending_plan,
+    load_config_base,
+    run_parallel_workflow,
+    write_output,
+)
 from parcellate.interfaces.utils import (
-    _as_list,
     _atlas_threshold_label,
     _mask_label,
     _mask_threshold_label,
-    _parse_log_level,
-    _parse_mask,
-    parse_atlases,
-    write_parcellation_sidecar,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -101,8 +97,7 @@ def _build_output_path(
     mask_threshold: float = 0.0,
     atlas_threshold: float = 0.0,
 ) -> Path:
-    """Construct the output path for a parcellation result."""
-
+    """Construct the output path for a QSIRecon parcellation result."""
     workflow = scalar_map.recon_workflow or "parcellate"
     base = destination / f"qsirecon-{workflow}"
 
@@ -139,90 +134,37 @@ def _build_output_path(
 
 
 def _write_output(result: ParcellationOutput, destination: Path, config: QSIReconConfig) -> Path:
-    """Write a parcellation output and JSON sidecar to disk using a QSIRecon-like layout."""
-
-    out_path = _build_output_path(
-        context=result.context,
-        atlas=result.atlas,
-        scalar_map=result.scalar_map,
-        destination=destination,
-        mask=config.mask,
-        mask_threshold=config.mask_threshold,
-        atlas_threshold=result.atlas.atlas_threshold,
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    result.stats_table.to_csv(out_path, sep="\t", index=False)
-    LOGGER.debug("Wrote parcellation output to %s", out_path)
-
-    lut_path = result.atlas.lut if isinstance(result.atlas.lut, Path) else None
-    write_parcellation_sidecar(
-        tsv_path=out_path,
-        original_file=result.scalar_map.nifti_path,
-        atlas_name=result.atlas.name,
-        atlas_image=result.atlas.nifti_path,
-        atlas_lut=lut_path,
-        mask=config.mask,
-        space=result.atlas.space or result.scalar_map.space,
-        resampling_target=config.resampling_target,
-        background_label=config.background_label,
-        mask_threshold=config.mask_threshold,
-        atlas_threshold=result.atlas.atlas_threshold,
-    )
-    return out_path
+    """Write a parcellation output and JSON sidecar for a QSIRecon result."""
+    return write_output(result, destination=destination, config=config, build_output_path_fn=_build_output_path)
 
 
-def _run_recon(
-    recon: ReconInput,
-    config: QSIReconConfig,
-) -> list[Path]:
-    """Run the parcellation workflow for a single recon."""
+def _run_recon(recon: ReconInput, config: QSIReconConfig) -> list[Path]:
+    """Run the parcellation workflow for a single QSIRecon recon."""
     plan = plan_parcellation_workflow(recon)
-    pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
-    reused_outputs: list[Path] = []
+    pending_plan, reused_outputs = build_pending_plan(
+        recon=recon,
+        config=config,
+        plan=plan,
+        build_output_path_fn=_build_output_path,
+        catch_value_error=True,  # QSIRecon: param field may be missing
+    )
     outputs: list[Path] = []
-
-    for atlas, scalar_maps in plan.items():
-        remaining: list[ScalarMapDefinition] = []
-        for scalar_map in scalar_maps:
-            try:
-                out_path = _build_output_path(
-                    context=recon.context,
-                    atlas=atlas,
-                    scalar_map=scalar_map,
-                    destination=config.output_dir,
-                    mask=config.mask,
-                    mask_threshold=config.mask_threshold,
-                    atlas_threshold=atlas.atlas_threshold,
-                )
-                if not config.force and out_path.exists():
-                    LOGGER.info("Reusing existing parcellation output at %s", out_path)
-                    reused_outputs.append(out_path)
-                else:
-                    remaining.append(scalar_map)
-            except ValueError:
-                LOGGER.warning(
-                    "Could not build output path for %s, %s, %s",
-                    recon.context,
-                    atlas,
-                    scalar_map,
-                )
-                continue
-        if remaining:
-            pending_plan[atlas] = remaining
 
     if pending_plan:
         jobs = run_parcellation_workflow(recon=recon, plan=pending_plan, config=config)
         for result in jobs:
-            outputs.append(_write_output(result, destination=config.output_dir, config=config))
+            outputs.append(
+                write_output(
+                    result, destination=config.output_dir, config=config, build_output_path_fn=_build_output_path
+                )
+            )
 
     outputs.extend(reused_outputs)
     return outputs
 
 
 def run_parcellations(config: QSIReconConfig) -> list[Path]:
-    """Execute the full parcellation workflow from a parsed config."""
-
+    """Execute the full QSIRecon parcellation workflow from a parsed config."""
     logging.basicConfig(level=config.log_level, format="%(asctime)s [%(levelname)s] %(message)s")
     LOGGER.info("Loading QSIRecon inputs from %s", config.input_root)
 
@@ -373,9 +315,8 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for CLI execution."""
-
     parser = argparse.ArgumentParser(description="Run parcellations for QSIRecon derivatives.")
-    add_cli_args(parser)
+    add_cli_args(parser, "Root directory of QSIRecon derivatives.")
     args = parser.parse_args(argv)
     config = load_config(args)
 

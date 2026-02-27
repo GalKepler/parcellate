@@ -9,36 +9,32 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
-
-try:  # Python 3.11+
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - fallback for older environments
-    import tomli as tomllib  # type: ignore[import]
 
 from parcellate.interfaces.cat12.loader import discover_cat12_xml, extract_tiv_from_xml, load_cat12_inputs
 from parcellate.interfaces.cat12.models import (
     AtlasDefinition,
     Cat12Config,
-    ParcellationOutput,
     ReconInput,
     ScalarMapDefinition,
     SubjectContext,
 )
+from parcellate.interfaces.models import ParcellationOutput
 from parcellate.interfaces.planner import plan_parcellation_workflow
 from parcellate.interfaces.runner import run_parcellation_workflow
+from parcellate.interfaces.shared import (
+    add_cli_args,
+    build_pending_plan,
+    load_config_base,
+    run_parallel_workflow,
+    write_output,
+)
 from parcellate.interfaces.utils import (
-    _as_list,
     _atlas_threshold_label,
     _mask_label,
     _mask_threshold_label,
-    _parse_log_level,
-    _parse_mask,
-    parse_atlases,
-    write_parcellation_sidecar,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -48,6 +44,7 @@ def load_config(args: argparse.Namespace) -> Cat12Config:
     """Parse a TOML configuration file and override with CLI arguments.
 
     The configuration expects the following keys:
+
     - ``input_root``: Root directory of CAT12 derivatives.
     - ``output_dir``: Destination directory for parcellation outputs.
     - ``atlases``: List of atlas definitions (each with name, path, lut, space).
@@ -116,8 +113,7 @@ def _build_output_path(
     mask_threshold: float = 0.0,
     atlas_threshold: float = 0.0,
 ) -> Path:
-    """Construct the output path for a parcellation result."""
-
+    """Construct the output path for a CAT12 parcellation result."""
     base = destination / "cat12"
 
     subject_dir = base / f"sub-{context.subject_id}"
@@ -147,40 +143,6 @@ def _build_output_path(
 
     filename = "_".join([*entities, "parc"]) + ".tsv"
     return output_dir / filename
-
-
-def _write_output(result: ParcellationOutput, destination: Path, config: Cat12Config) -> Path:
-    """Write a parcellation output and JSON sidecar to disk using a CAT12-like layout."""
-
-    out_path = _build_output_path(
-        context=result.context,
-        atlas=result.atlas,
-        scalar_map=result.scalar_map,
-        destination=destination,
-        mask=config.mask,
-        mask_threshold=config.mask_threshold,
-        atlas_threshold=result.atlas.atlas_threshold,
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    result.stats_table.to_csv(out_path, sep="\t", index=False)
-    LOGGER.debug("Wrote parcellation output to %s", out_path)
-
-    lut_path = result.atlas.lut if isinstance(result.atlas.lut, Path) else None
-    write_parcellation_sidecar(
-        tsv_path=out_path,
-        original_file=result.scalar_map.nifti_path,
-        atlas_name=result.atlas.name,
-        atlas_image=result.atlas.nifti_path,
-        atlas_lut=lut_path,
-        mask=config.mask,
-        space=result.atlas.space or result.scalar_map.space,
-        resampling_target=config.resampling_target,
-        background_label=config.background_label,
-        mask_threshold=config.mask_threshold,
-        atlas_threshold=result.atlas.atlas_threshold,
-    )
-    return out_path
 
 
 def _find_first_tiv(root: Path, subject: str, session: str | None) -> float | None:
@@ -235,32 +197,21 @@ def _extract_and_write_tiv(root: Path, context: SubjectContext, destination: Pat
     return tiv_path
 
 
-def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
-    """Run the parcellation workflow for a single recon."""
-    plan = plan_parcellation_workflow(recon)
-    pending_plan: dict[AtlasDefinition, list[ScalarMapDefinition]] = {}
-    reused_outputs: list[Path] = []
-    outputs: list[Path] = []
+def _write_output(result: ParcellationOutput, destination: Path, config: Cat12Config) -> Path:
+    """Write a parcellation output and JSON sidecar for a CAT12 result."""
+    return write_output(result, destination=destination, config=config, build_output_path_fn=_build_output_path)
 
-    for atlas, scalar_maps in plan.items():
-        remaining: list[ScalarMapDefinition] = []
-        for scalar_map in scalar_maps:
-            out_path = _build_output_path(
-                context=recon.context,
-                atlas=atlas,
-                scalar_map=scalar_map,
-                destination=config.output_dir,
-                mask=config.mask,
-                mask_threshold=config.mask_threshold,
-                atlas_threshold=atlas.atlas_threshold,
-            )
-            if not config.force and out_path.exists():
-                LOGGER.info("Reusing existing parcellation output at %s", out_path)
-                reused_outputs.append(out_path)
-            else:
-                remaining.append(scalar_map)
-        if remaining:
-            pending_plan[atlas] = remaining
+
+def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
+    """Run the parcellation workflow for a single CAT12 recon."""
+    plan = plan_parcellation_workflow(recon)
+    pending_plan, reused_outputs = build_pending_plan(
+        recon=recon,
+        config=config,
+        plan=plan,
+        build_output_path_fn=_build_output_path,
+    )
+    outputs: list[Path] = []
 
     if pending_plan:
         tiv_value = _find_first_tiv(config.input_root, recon.context.subject_id, recon.context.session_id)
@@ -268,7 +219,11 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
         for result in jobs:
             if tiv_value is not None:
                 result.stats_table["vol_TIV"] = tiv_value
-            outputs.append(_write_output(result, destination=config.output_dir, config=config))
+            outputs.append(
+                write_output(
+                    result, destination=config.output_dir, config=config, build_output_path_fn=_build_output_path
+                )
+            )
         tiv_path = _extract_and_write_tiv(root=config.input_root, context=recon.context, destination=config.output_dir)
         if tiv_path is not None:
             outputs.append(tiv_path)
@@ -278,8 +233,7 @@ def _run_recon(recon: ReconInput, config: Cat12Config) -> list[Path]:
 
 
 def run_parcellations(config: Cat12Config) -> list[Path]:
-    """Execute the full parcellation workflow from a parsed config."""
-
+    """Execute the full CAT12 parcellation workflow from a parsed config."""
     logging.basicConfig(level=config.log_level, format="%(asctime)s [%(levelname)s] %(message)s")
     LOGGER.info("Loading CAT12 inputs from %s", config.input_root)
 
@@ -429,9 +383,8 @@ def add_cli_args(parser: argparse.ArgumentParser) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for CLI execution."""
-
     parser = argparse.ArgumentParser(description="Run parcellations for CAT12 derivatives.")
-    add_cli_args(parser)
+    add_cli_args(parser, "Root directory of CAT12 derivatives.")
     args = parser.parse_args(argv)
     config = load_config(args)
 
