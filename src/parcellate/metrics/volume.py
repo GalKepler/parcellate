@@ -1048,6 +1048,50 @@ def fails_normality(values):
     return False  # If no test available, default to False
 
 
+# ---------------------------------------------------------------------------
+# Tier definitions
+# ---------------------------------------------------------------------------
+
+#: Names of statistics in the *core* tier.
+#: Suitable for fast exploratory analysis.  Includes only the most common
+#: descriptive measures (mean, standard deviation, median, volume, voxel
+#: count, and sum).
+CORE_STATISTIC_NAMES: frozenset[str] = frozenset({
+    "mean",
+    "std",
+    "median",
+    "volume_mm3",
+    "voxel_count",
+    "sum",
+})
+
+#: Names of statistics in the *extended* tier.
+#: Adds robust/filtered estimates and basic shape descriptors on top of the
+#: *core* set — a good default for production parcellation pipelines.
+EXTENDED_STATISTIC_NAMES: frozenset[str] = frozenset({
+    "mean",
+    "std",
+    "median",
+    "volume_mm3",
+    "voxel_count",
+    "sum",
+    "robust_mean",
+    "robust_std",
+    "mad_median",
+    "z_filtered_mean",
+    "z_filtered_std",
+    "iqr_filtered_mean",
+    "iqr_filtered_std",
+    "cv",
+    "robust_cv",
+    "skewness",
+    "excess_kurtosis",
+    "percentile_5",
+    "percentile_25",
+    "percentile_75",
+    "percentile_95",
+})
+
 # define builtin statistics
 BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="volume_mm3", function=volume, requires_image=True),
@@ -1099,3 +1143,31 @@ BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="has_outliers", function=has_outliers),
     Statistic(name="fails_normality", function=fails_normality),
 ]
+
+# ---------------------------------------------------------------------------
+# Tier lists — built from BUILTIN_STATISTICS so ordering is stable
+# ---------------------------------------------------------------------------
+
+#: *Core* statistics: six fundamental descriptive measures.
+#: Suitable for fast exploratory runs or when output file size matters.
+CORE_STATISTICS: list[Statistic] = [s for s in BUILTIN_STATISTICS if s.name in CORE_STATISTIC_NAMES]
+
+#: *Extended* statistics: core + robust estimates and basic shape descriptors.
+#: A good default for production parcellation pipelines.
+EXTENDED_STATISTICS: list[Statistic] = [s for s in BUILTIN_STATISTICS if s.name in EXTENDED_STATISTIC_NAMES]
+
+#: *Diagnostic* statistics: all 45 built-in statistics.
+#: Maximum detail; use when investigating data quality or distribution shape.
+DIAGNOSTIC_STATISTICS: list[Statistic] = BUILTIN_STATISTICS
+
+#: Mapping from tier name to the corresponding list of statistics.
+#: Used by :class:`~parcellate.parcellation.volume.VolumetricParcellator`
+#: when a ``stat_tier`` string is supplied instead of explicit functions.
+#:
+#: Valid keys: ``"core"``, ``"extended"``, ``"diagnostic"``, ``"all"``.
+STATISTIC_TIERS: dict[str, list[Statistic]] = {
+    "core": CORE_STATISTICS,
+    "extended": EXTENDED_STATISTICS,
+    "diagnostic": DIAGNOSTIC_STATISTICS,
+    "all": BUILTIN_STATISTICS,
+}

@@ -679,3 +679,53 @@ class TestCategoricalFlags:
         np.random.seed(0)
         values = np.random.normal(0, 1, 500)
         assert not is_bimodal(values)
+
+
+class TestStatisticTiers:
+    """Tests for the named statistics tier system."""
+
+    def test_core_tier_contains_expected_names(self) -> None:
+        from parcellate.metrics.volume import CORE_STATISTIC_NAMES, CORE_STATISTICS
+
+        names = {s.name for s in CORE_STATISTICS}
+        assert names == CORE_STATISTIC_NAMES
+
+    def test_core_tier_has_six_statistics(self) -> None:
+        from parcellate.metrics.volume import CORE_STATISTICS
+
+        assert len(CORE_STATISTICS) == 6
+
+    def test_extended_tier_is_superset_of_core(self) -> None:
+        from parcellate.metrics.volume import CORE_STATISTICS, EXTENDED_STATISTICS
+
+        core_names = {s.name for s in CORE_STATISTICS}
+        extended_names = {s.name for s in EXTENDED_STATISTICS}
+        assert core_names.issubset(extended_names)
+
+    def test_diagnostic_tier_equals_builtin_statistics(self) -> None:
+        from parcellate.metrics.volume import BUILTIN_STATISTICS, DIAGNOSTIC_STATISTICS
+
+        assert DIAGNOSTIC_STATISTICS is BUILTIN_STATISTICS
+
+    def test_statistic_tiers_mapping_has_expected_keys(self) -> None:
+        from parcellate.metrics.volume import STATISTIC_TIERS
+
+        assert set(STATISTIC_TIERS.keys()) == {"core", "extended", "diagnostic", "all"}
+
+    def test_all_tier_equals_diagnostic(self) -> None:
+        from parcellate.metrics.volume import STATISTIC_TIERS
+
+        assert STATISTIC_TIERS["all"] is STATISTIC_TIERS["diagnostic"]
+
+    def test_tiers_exported_from_metrics_init(self) -> None:
+        from parcellate.metrics import (
+            CORE_STATISTICS,
+            DIAGNOSTIC_STATISTICS,
+            EXTENDED_STATISTICS,
+            STATISTIC_TIERS,
+        )
+
+        assert len(CORE_STATISTICS) > 0
+        assert len(EXTENDED_STATISTICS) > len(CORE_STATISTICS)
+        assert len(DIAGNOSTIC_STATISTICS) >= len(EXTENDED_STATISTICS)
+        assert isinstance(STATISTIC_TIERS, dict)

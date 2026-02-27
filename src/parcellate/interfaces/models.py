@@ -33,6 +33,7 @@ class ParcellationConfig:
     mask_threshold: float = 0.0
     background_label: int = 0
     resampling_target: str | None = "data"
+    stat_tier: str | None = None
     force: bool = False
     log_level: int = logging.INFO
     n_jobs: int = 1

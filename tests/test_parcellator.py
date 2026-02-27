@@ -690,3 +690,85 @@ def test_3d_atlas_unaffected() -> None:
     r2 = df.loc[df["index"] == 2].iloc[0]
     assert r1["voxel_count"] == 2
     assert r2["voxel_count"] == 4
+
+
+# ---------------------------------------------------------------------------
+# Stat tier tests
+# ---------------------------------------------------------------------------
+
+
+def test_stat_tier_core_produces_fewer_columns() -> None:
+    """stat_tier='core' produces only the six core statistics columns."""
+    atlas_img = _atlas()
+    scalar_data = np.array([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], dtype=np.float32)
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp = VolumetricParcellator(atlas_img, stat_tier="core")
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    # core: mean, std, median, volume_mm3, voxel_count, sum  plus index + label
+    stat_cols = [c for c in df.columns if c not in {"index", "label"}]
+    assert set(stat_cols) == {"mean", "std", "median", "volume_mm3", "voxel_count", "sum"}
+
+
+def test_stat_tier_extended_superset_of_core() -> None:
+    """stat_tier='extended' produces more columns than 'core'."""
+    atlas_img = _atlas()
+    scalar_data = np.array([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], dtype=np.float32)
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp_core = VolumetricParcellator(atlas_img, stat_tier="core")
+    vp_extended = VolumetricParcellator(atlas_img, stat_tier="extended")
+    vp_core.fit(scalar_img)
+    vp_extended.fit(scalar_img)
+    df_core = vp_core.transform(scalar_img)
+    df_extended = vp_extended.transform(scalar_img)
+
+    core_cols = set(df_core.columns) - {"index", "label"}
+    extended_cols = set(df_extended.columns) - {"index", "label"}
+    assert core_cols.issubset(extended_cols)
+    assert len(extended_cols) > len(core_cols)
+
+
+def test_stat_tier_diagnostic_same_as_default() -> None:
+    """stat_tier='diagnostic' produces the same columns as the default (no tier)."""
+    atlas_img = _atlas()
+    scalar_data = np.array([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], dtype=np.float32)
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp_default = VolumetricParcellator(atlas_img)
+    vp_diag = VolumetricParcellator(atlas_img, stat_tier="diagnostic")
+    vp_default.fit(scalar_img)
+    vp_diag.fit(scalar_img)
+    df_default = vp_default.transform(scalar_img)
+    df_diag = vp_diag.transform(scalar_img)
+
+    assert set(df_default.columns) == set(df_diag.columns)
+
+
+def test_stat_tier_unknown_raises() -> None:
+    """An unknown tier name raises MissingStatisticalFunctionError."""
+    from parcellate.parcellation.volume import MissingStatisticalFunctionError
+
+    atlas_img = _atlas()
+    with pytest.raises(MissingStatisticalFunctionError, match="Unknown stat_tier"):
+        VolumetricParcellator(atlas_img, stat_tier="nonexistent")
+
+
+def test_stat_functions_takes_precedence_over_stat_tier() -> None:
+    """Explicit stat_functions override stat_tier."""
+    atlas_img = _atlas()
+    scalar_data = np.array([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], dtype=np.float32)
+    scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
+
+    vp = VolumetricParcellator(
+        atlas_img,
+        stat_functions={"custom_mean": np.nanmean},
+        stat_tier="core",  # should be ignored
+    )
+    vp.fit(scalar_img)
+    df = vp.transform(scalar_img)
+
+    stat_cols = [c for c in df.columns if c not in {"index", "label"}]
+    assert stat_cols == ["custom_mean"]

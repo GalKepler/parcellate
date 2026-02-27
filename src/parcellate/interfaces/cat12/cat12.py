@@ -56,7 +56,52 @@ def load_config(args: argparse.Namespace) -> Cat12Config:
     - ``n_jobs``: Number of parallel jobs for within-subject parcellation.
     - ``n_procs``: Number of parallel processes for across-subject parcellation.
     """
-    return load_config_base(args, Cat12Config, default_atlas_space="MNI152NLin2009cAsym")
+
+    data = {}
+    if args.config:
+        with args.config.open("rb") as f:
+            data = tomllib.load(f)
+
+    input_root_str = args.input_root or data.get("input_root", ".")
+    input_root = Path(input_root_str).expanduser().resolve()
+    output_dir_str = args.output_dir or data.get("output_dir", input_root / "parcellations")
+    output_dir = Path(output_dir_str).expanduser().resolve()
+    subjects = args.subjects or _as_list(data.get("subjects"))
+    sessions = args.sessions or _as_list(data.get("sessions"))
+
+    # Parse atlas definitions
+    atlas_configs = []
+    if args.atlas_config:
+        for atlas_path in args.atlas_config:
+            with atlas_path.open("rb") as f:
+                atlas_configs.append(tomllib.load(f))
+    else:
+        atlas_configs = data.get("atlases", [])
+    atlases = parse_atlases(atlas_configs, default_space="MNI152NLin2009cAsym")
+
+    mask_value = args.mask or data.get("mask")
+    mask = _parse_mask(mask_value)
+    mask_threshold = float(getattr(args, "mask_threshold", None) or data.get("mask_threshold", 0.0))
+    force = args.force or bool(data.get("force", False))
+    log_level = _parse_log_level(args.log_level or data.get("log_level"))
+    n_jobs = args.n_jobs or int(data.get("n_jobs", 1))
+    n_procs = args.n_procs or int(data.get("n_procs", 1))
+    stat_tier = getattr(args, "stat_tier", None) or data.get("stat_tier") or None
+
+    return Cat12Config(
+        input_root=input_root,
+        output_dir=output_dir,
+        atlases=atlases,
+        subjects=subjects,
+        sessions=sessions,
+        mask=mask,
+        mask_threshold=mask_threshold,
+        force=force,
+        log_level=log_level,
+        n_jobs=n_jobs,
+        n_procs=n_procs,
+        stat_tier=stat_tier,
+    )
 
 
 def _build_output_path(
@@ -203,7 +248,137 @@ def run_parcellations(config: Cat12Config) -> list[Path]:
         LOGGER.warning("No CAT12 inputs discovered. Nothing to do.")
         return []
 
-    return run_parallel_workflow(config, recon_inputs, _run_recon, "CAT12")
+    outputs: list[Path] = []
+    total = len(recon_inputs)
+    if config.n_procs > 1:
+        LOGGER.info("Running parcellation across subjects with %d processes", config.n_procs)
+        with ProcessPoolExecutor(max_workers=config.n_procs) as executor:
+            future_to_recon = {executor.submit(_run_recon, recon, config): recon for recon in recon_inputs}
+            for i, future in enumerate(as_completed(future_to_recon), start=1):
+                recon = future_to_recon[future]
+                try:
+                    result = future.result()
+                    outputs.extend(result)
+                    LOGGER.info(
+                        "[%d/%d] Finished parcellation for %s (%d outputs)",
+                        i,
+                        total,
+                        recon.context.label,
+                        len(result),
+                    )
+                except Exception:
+                    LOGGER.exception(
+                        "[%d/%d] Failed parcellation for %s",
+                        i,
+                        total,
+                        recon.context.label,
+                    )
+    else:
+        for i, recon in enumerate(recon_inputs, start=1):
+            try:
+                result = _run_recon(recon, config)
+                outputs.extend(result)
+                LOGGER.info(
+                    "[%d/%d] Finished parcellation for %s (%d outputs)",
+                    i,
+                    total,
+                    recon.context.label,
+                    len(result),
+                )
+            except Exception:
+                LOGGER.exception(
+                    "[%d/%d] Failed parcellation for %s",
+                    i,
+                    total,
+                    recon.context.label,
+                )
+
+    LOGGER.info("Finished writing %d parcellation files", len(outputs))
+    return outputs
+
+
+def add_cli_args(parser: argparse.ArgumentParser) -> None:
+    """Add CLI arguments to the parser."""
+
+    parser.add_argument(
+        "--input-root",
+        type=Path,
+        help="Root directory of CAT12 derivatives.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Destination directory for parcellation outputs.",
+    )
+    parser.add_argument(
+        "--atlas-config",
+        type=Path,
+        nargs="+",
+        help="Path to one or more TOML files defining atlases.",
+    )
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        help="List of subject identifiers to process.",
+    )
+    parser.add_argument(
+        "--sessions",
+        nargs="+",
+        help="List of session identifiers to process.",
+    )
+    parser.add_argument(
+        "--mask",
+        type=Path,
+        help="Optional path to a brain mask to apply during parcellation.",
+    )
+    parser.add_argument(
+        "--mask-threshold",
+        type=float,
+        default=0.0,
+        dest="mask_threshold",
+        help=(
+            "Threshold for the mask image. Voxels with mask values strictly greater than this "
+            "value are included; all others are excluded. Default: 0.0 (any non-zero voxel passes). "
+            "Use values in [0, 1] for probability maps, e.g. 0.5 for >50%% probability."
+        ),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Whether to overwrite existing parcellation outputs.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging verbosity (e.g., INFO, DEBUG).",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        help="Number of parallel jobs for within-subject parcellation.",
+    )
+    parser.add_argument(
+        "--n-procs",
+        type=int,
+        help="Number of parallel processes for across-subject parcellation.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to a TOML configuration file.",
+    )
+    parser.add_argument(
+        "--stat-tier",
+        dest="stat_tier",
+        choices=["core", "extended", "diagnostic", "all"],
+        default=None,
+        help=(
+            "Named statistics tier to compute. "
+            "'core': mean/std/median/volume/voxel_count/sum (fastest). "
+            "'extended': core + robust estimates and shape descriptors. "
+            "'diagnostic'/'all': all 45 built-in statistics (default)."
+        ),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

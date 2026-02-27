@@ -16,7 +16,7 @@ from nilearn.datasets import (
 from nilearn.image import resample_to_img
 
 from parcellate.metrics.base import Statistic
-from parcellate.metrics.volume import BUILTIN_STATISTICS
+from parcellate.metrics.volume import BUILTIN_STATISTICS, STATISTIC_TIERS
 from parcellate.utils import _load_nifti
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ class VolumetricParcellator:
         background_label: int = 0,
         resampling_target: Literal["data", "labels", "atlas", None] = "data",
         stat_functions: Mapping[str, Callable[..., float]] | None = None,
+        stat_tier: str | None = None,
     ) -> None:
         """
         Initialize a volumetric parcellator
@@ -104,7 +105,13 @@ class VolumetricParcellator:
         resampling_target : Literal["data", "labels", None], optional
             Resampling target for input maps, by default "data"
         stat_functions : Mapping[str, StatFunction] | None, optional
-            Mapping of statistic names to functions, by default None
+            Mapping of statistic names to functions, by default None.
+            When provided, takes precedence over ``stat_tier``.
+        stat_tier : str | None, optional
+            Named statistics tier to use when ``stat_functions`` is ``None``.
+            Valid values: ``"core"``, ``"extended"``, ``"diagnostic"``, ``"all"``.
+            Defaults to ``None``, which selects all built-in statistics
+            (equivalent to ``"diagnostic"``).
         """
         self.atlas_img = _load_nifti(atlas_img)
         self.lut = self._load_atlas_lut(lut) if lut is not None else None
@@ -116,7 +123,7 @@ class VolumetricParcellator:
         self._atlas_data = self._load_atlas_data()
         self._is_probabilistic = self._atlas_data.ndim == 4
         self._regions = self._build_regions(labels)
-        self._stat_functions = self._prepare_stat_functions(stat_functions)
+        self._stat_functions = self._prepare_stat_functions(stat_functions, stat_tier=stat_tier)
         self._fitted_scalar_id: str | int | None = None
 
     def _load_mask(self, mask: nib.Nifti1Image | str | Path) -> nib.Nifti1Image:
@@ -266,16 +273,22 @@ class VolumetricParcellator:
         stat_functions: Mapping[str, Callable[..., float]] | None = None,
         *,
         fallback: Mapping[str, Callable[..., float]] | None = None,
+        stat_tier: str | None = None,
     ) -> list[Statistic]:
         """
-        Generate a list of summary statistics to describe each ROI
+        Generate a list of summary statistics to describe each ROI.
 
         Parameters
         ----------
         stat_functions : Mapping[str, Callable[..., float]] | None
             Either a mapping of statistic names to functions or None to use defaults.
+            When provided, takes precedence over ``stat_tier``.
         fallback : Mapping[str, Callable[..., float]] | None, optional
-            Fallback statistics to use if stat_functions is None, by default None
+            Fallback statistics to use if stat_functions is None, by default None.
+            Ignored when ``stat_tier`` is set.
+        stat_tier : str | None, optional
+            Named tier to select when ``stat_functions`` is ``None``.
+            Valid values: ``"core"``, ``"extended"``, ``"diagnostic"``, ``"all"``.
 
         Returns
         -------
@@ -285,9 +298,17 @@ class VolumetricParcellator:
         Raises
         ------
         ValueError
-            If no statistical functions are provided.
+            If no statistical functions are provided, or if an unknown tier name
+            is supplied.
         """
         if stat_functions is None:
+            if stat_tier is not None:
+                if stat_tier not in STATISTIC_TIERS:
+                    valid = ", ".join(f'"{k}"' for k in STATISTIC_TIERS)
+                    raise MissingStatisticalFunctionError(
+                        message=f"Unknown stat_tier {stat_tier!r}. Valid tiers: {valid}."
+                    )
+                return STATISTIC_TIERS[stat_tier]
             if fallback is None:
                 return BUILTIN_STATISTICS
             return fallback

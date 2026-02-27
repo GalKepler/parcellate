@@ -128,6 +128,7 @@ def run_parcellation_workflow(
                 atlas_threshold=atlas.atlas_threshold,
                 background_label=config.background_label,
                 resampling_target=config.resampling_target,
+                stat_tier=config.stat_tier,
             )
             vp.fit(scalar_img=scalar_maps[0].nifti_path)
             parcellators[atlas] = (vp, scalar_maps)
