@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/parcellate_logo.png" alt="parcellate logo" width="220">
+</p>
+
 # parcellate
 
 `parcellate` is a BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation. It integrates with **CAT12** (VBM) and **QSIRecon** (dMRI) preprocessing pipelines and produces tidy TSV tables suitable for downstream analysis and quality control.
