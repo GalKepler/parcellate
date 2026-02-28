@@ -43,6 +43,8 @@ plugins:
             docstring_style: numpy
 
 markdown_extensions:
+  - attr_list
+  - md_in_html
   - admonition
   - pymdownx.details
   - pymdownx.highlight:
