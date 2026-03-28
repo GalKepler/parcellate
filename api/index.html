@@ -1436,6 +1436,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#parcellate.metrics.volume.coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2134,6 +2145,17 @@
     <span class="md-ellipsis">
       
         fails_normality
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parcellate.metrics.volume.coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        coverage
       
     </span>
   </a>
@@ -8804,6 +8826,119 @@ Falls back to D'Agostino-Pearson for larger samples.</p>
 <a id="__codelineno-0-1046" name="__codelineno-0-1046"></a>        <span class="k">return</span> <span class="n">dagostino_p_val</span> <span class="o">&lt;</span> <span class="mf">0.05</span>
 <a id="__codelineno-0-1047" name="__codelineno-0-1047"></a>
 <a id="__codelineno-0-1048" name="__codelineno-0-1048"></a>    <span class="k">return</span> <span class="kc">False</span>  <span class="c1"># If no test available, default to False</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="parcellate.metrics.volume.coverage" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">coverage</span><span class="p">(</span><span class="n">values</span><span class="p">)</span></code>
+
+<a href="#parcellate.metrics.volume.coverage" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Proportion of non-NaN values in the parcel.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>values</code>
+            </td>
+            <td>
+                  <code><span title="array">array</span> - <span title="like">like</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Within-ROI voxel/vertex values</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Coverage proportion (0 to 1). Higher values indicate more complete data.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/parcellate/metrics/volume.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1051">1051</a></span>
+<span class="normal"><a href="#__codelineno-0-1052">1052</a></span>
+<span class="normal"><a href="#__codelineno-0-1053">1053</a></span>
+<span class="normal"><a href="#__codelineno-0-1054">1054</a></span>
+<span class="normal"><a href="#__codelineno-0-1055">1055</a></span>
+<span class="normal"><a href="#__codelineno-0-1056">1056</a></span>
+<span class="normal"><a href="#__codelineno-0-1057">1057</a></span>
+<span class="normal"><a href="#__codelineno-0-1058">1058</a></span>
+<span class="normal"><a href="#__codelineno-0-1059">1059</a></span>
+<span class="normal"><a href="#__codelineno-0-1060">1060</a></span>
+<span class="normal"><a href="#__codelineno-0-1061">1061</a></span>
+<span class="normal"><a href="#__codelineno-0-1062">1062</a></span>
+<span class="normal"><a href="#__codelineno-0-1063">1063</a></span>
+<span class="normal"><a href="#__codelineno-0-1064">1064</a></span>
+<span class="normal"><a href="#__codelineno-0-1065">1065</a></span>
+<span class="normal"><a href="#__codelineno-0-1066">1066</a></span>
+<span class="normal"><a href="#__codelineno-0-1067">1067</a></span>
+<span class="normal"><a href="#__codelineno-0-1068">1068</a></span>
+<span class="normal"><a href="#__codelineno-0-1069">1069</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1051" name="__codelineno-0-1051"></a><span class="k">def</span><span class="w"> </span><span class="nf">coverage</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+<a id="__codelineno-0-1052" name="__codelineno-0-1052"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<a id="__codelineno-0-1053" name="__codelineno-0-1053"></a><span class="sd">    Proportion of non-NaN values in the parcel.</span>
+<a id="__codelineno-0-1054" name="__codelineno-0-1054"></a>
+<a id="__codelineno-0-1055" name="__codelineno-0-1055"></a><span class="sd">    Parameters</span>
+<a id="__codelineno-0-1056" name="__codelineno-0-1056"></a><span class="sd">    ----------</span>
+<a id="__codelineno-0-1057" name="__codelineno-0-1057"></a><span class="sd">    values : array-like</span>
+<a id="__codelineno-0-1058" name="__codelineno-0-1058"></a><span class="sd">        Within-ROI voxel/vertex values</span>
+<a id="__codelineno-0-1059" name="__codelineno-0-1059"></a>
+<a id="__codelineno-0-1060" name="__codelineno-0-1060"></a><span class="sd">    Returns</span>
+<a id="__codelineno-0-1061" name="__codelineno-0-1061"></a><span class="sd">    -------</span>
+<a id="__codelineno-0-1062" name="__codelineno-0-1062"></a><span class="sd">    float</span>
+<a id="__codelineno-0-1063" name="__codelineno-0-1063"></a><span class="sd">        Coverage proportion (0 to 1). Higher values indicate more complete data.</span>
+<a id="__codelineno-0-1064" name="__codelineno-0-1064"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-1065" name="__codelineno-0-1065"></a>    <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+<a id="__codelineno-0-1066" name="__codelineno-0-1066"></a>    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-1067" name="__codelineno-0-1067"></a>        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-1068" name="__codelineno-0-1068"></a>    <span class="n">non_nan</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+<a id="__codelineno-0-1069" name="__codelineno-0-1069"></a>    <span class="k">return</span> <span class="n">non_nan</span> <span class="o">/</span> <span class="n">total</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
