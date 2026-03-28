@@ -1,7 +1,7 @@
 # Metrics reference
 
 `parcellate` ships with 45 built-in statistics organised into named **tiers**.
-Select a tier via `stat_tier` in Python, TOML config, or the `--stat-tier` CLI flag.
+Select a tier via `stat_tier` when constructing a `VolumetricParcellator`.
 
 ## Tiers at a glance
 

@@ -2,7 +2,7 @@ site_name: parcellate
 site_url: https://GalKepler.github.io/parcellate/
 repo_name: GalKepler/parcellate
 repo_url: https://github.com/GalKepler/parcellate
-site_description: A BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.
+site_description: A Python library for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.
 
 theme:
   name: material
@@ -65,13 +65,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting_started.md
-  - Pipeline guides:
-      - CAT12: cat12_guide.md
-      - QSIRecon: qsirecon_guide.md
   - Reference:
-      - CLI reference: cli_reference.md
-      - Metrics reference: metrics_reference.md
-      - Configuration: configuration.md
       - Usage guide: usage.md
-      - Troubleshooting: troubleshooting.md
+      - Metrics reference: metrics_reference.md
       - API: api.md

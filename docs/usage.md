@@ -103,10 +103,6 @@ Each volume in the 4D image corresponds to one region. Volume index 0 (zero-base
 
 - ``atlas_threshold`` (float, default ``0.0``) — minimum probability to include a voxel. The comparison is strict (``>``), so a voxel with probability exactly equal to the threshold is excluded. Set to ``0.0`` to include every non-zero voxel.
 
-**Output filename entity**
-
-When ``atlas_threshold > 0``, the value is embedded in the output filename as the BIDS-style entity ``atlasthr-<value>`` (e.g., ``atlasthr-0.25``). The entity is omitted when the threshold is zero.
-
 ```python
 from parcellate import VolumetricParcellator
 
@@ -128,14 +124,6 @@ When supplying a probabilistic brain mask (e.g., a grey-matter partial-volume es
 **Parameters**
 
 - ``mask_threshold`` (float, default ``0.0``) — minimum mask value to keep a voxel. Strict ``>`` comparison; voxels equal to the threshold are excluded. The default of ``0.0`` preserves the pre-v0.2.0 behaviour of including all non-zero mask voxels.
-
-**Output filename entity**
-
-When ``mask_threshold > 0``, the value appears as ``maskthr-<value>`` in the output filename. The entity is omitted when the threshold is zero.
-
-**Environment variable**
-
-When using the ``parcellate-cat12`` standalone CLI, set ``MASKING_THRESHOLD`` to supply the threshold without editing config files.
 
 ```python
 from parcellate import VolumetricParcellator
