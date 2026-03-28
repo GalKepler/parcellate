@@ -698,7 +698,7 @@ def test_3d_atlas_unaffected() -> None:
 
 
 def test_stat_tier_core_produces_fewer_columns() -> None:
-    """stat_tier='core' produces only the six core statistics columns."""
+    """stat_tier='core' produces only the seven core statistics columns."""
     atlas_img = _atlas()
     scalar_data = np.array([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], dtype=np.float32)
     scalar_img = nib.Nifti1Image(scalar_data, atlas_img.affine)
@@ -707,9 +707,9 @@ def test_stat_tier_core_produces_fewer_columns() -> None:
     vp.fit(scalar_img)
     df = vp.transform(scalar_img)
 
-    # core: mean, std, median, volume_mm3, voxel_count, sum  plus index + label
+    # core: mean, std, median, volume_mm3, voxel_count, sum, coverage  plus index + label
     stat_cols = [c for c in df.columns if c not in {"index", "label"}]
-    assert set(stat_cols) == {"mean", "std", "median", "volume_mm3", "voxel_count", "sum"}
+    assert set(stat_cols) == {"mean", "std", "median", "volume_mm3", "voxel_count", "sum", "coverage"}
 
 
 def test_stat_tier_extended_superset_of_core() -> None:

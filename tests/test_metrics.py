@@ -690,10 +690,10 @@ class TestStatisticTiers:
         names = {s.name for s in CORE_STATISTICS}
         assert names == CORE_STATISTIC_NAMES
 
-    def test_core_tier_has_six_statistics(self) -> None:
+    def test_core_tier_has_seven_statistics(self) -> None:
         from parcellate.metrics.volume import CORE_STATISTICS
 
-        assert len(CORE_STATISTICS) == 6
+        assert len(CORE_STATISTICS) == 7
 
     def test_extended_tier_is_superset_of_core(self) -> None:
         from parcellate.metrics.volume import CORE_STATISTICS, EXTENDED_STATISTICS

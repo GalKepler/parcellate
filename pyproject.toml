@@ -1,7 +1,7 @@
 [project]
 name = "parcellate"
-version = "0.3.0"
-description = "A simple tool for extracting regional statistics from scalar neuroimaging maps."
+version = "0.4.0"
+description = "Extract regional statistics from scalar brain maps using atlas-based parcellation."
 authors = [{ name = "Gal Kepler", email = "galkepler@gmail.com" }]
 readme = "README.md"
 keywords = ['python']
@@ -23,15 +23,7 @@ dependencies = [
     "numpy>=2.0.2",
     "pandas>=2.3.3",
     "scipy>=1.10.0",
-    "tomli>=2.3.0",
 ]
-
-[project.optional-dependencies]
-dotenv = ["python-dotenv>=1.0.0"]
-
-[project.scripts]
-parcellate = "parcellate.cli:main"
-parcellate-cat12 = "parcellate.interfaces.cat12.cli:main"
 
 [project.urls]
 Homepage = "https://GalKepler.github.io/parcellate/"

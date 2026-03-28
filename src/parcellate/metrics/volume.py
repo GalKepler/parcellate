@@ -1048,6 +1048,27 @@ def fails_normality(values):
     return False  # If no test available, default to False
 
 
+def coverage(values):
+    """
+    Proportion of non-NaN values in the parcel.
+
+    Parameters
+    ----------
+    values : array-like
+        Within-ROI voxel/vertex values
+
+    Returns
+    -------
+    float
+        Coverage proportion (0 to 1). Higher values indicate more complete data.
+    """
+    total = len(values)
+    if total == 0:
+        return float("nan")
+    non_nan = np.sum(~np.isnan(values))
+    return non_nan / total
+
+
 # ---------------------------------------------------------------------------
 # Tier definitions
 # ---------------------------------------------------------------------------
@@ -1063,6 +1084,7 @@ CORE_STATISTIC_NAMES: frozenset[str] = frozenset({
     "volume_mm3",
     "voxel_count",
     "sum",
+    "coverage",
 })
 
 #: Names of statistics in the *extended* tier.
@@ -1090,6 +1112,7 @@ EXTENDED_STATISTIC_NAMES: frozenset[str] = frozenset({
     "percentile_25",
     "percentile_75",
     "percentile_95",
+    "coverage",
 })
 
 # define builtin statistics
@@ -1142,6 +1165,7 @@ BUILTIN_STATISTICS: list[Statistic] = [
     Statistic(name="is_bimodal", function=is_bimodal),
     Statistic(name="has_outliers", function=has_outliers),
     Statistic(name="fails_normality", function=fails_normality),
+    Statistic(name="coverage", function=coverage),
 ]
 
 # ---------------------------------------------------------------------------
