@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.">
+        <meta name="description" content="A Python library for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.">
       
       
       
         <link rel="canonical" href="https://GalKepler.github.io/parcellate/usage/">
       
       
-        <link rel="prev" href="../configuration/">
+        <link rel="prev" href="../getting_started/">
       
       
-        <link rel="next" href="../troubleshooting/">
+        <link rel="next" href="../metrics_reference/">
       
       
         
@@ -265,35 +265,13 @@
   
   
   
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../cat12_guide/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  Pipeline guides
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
     
   
   
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../cli_reference/" class="md-tabs__link">
+        <a href="./" class="md-tabs__link">
           
   
   
@@ -409,139 +387,12 @@
       
   
   
-  
-  
-    
-    
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
-        
-          
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Pipeline guides
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Pipeline guides
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cat12_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CAT12
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../qsirecon_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    QSIRecon
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
     
   
   
   
     
     
-      
-        
-      
-        
-      
-        
       
         
       
@@ -565,10 +416,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   
@@ -586,8 +437,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -596,90 +447,6 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../cli_reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CLI reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../metrics_reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Metrics reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../configuration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
             
               
                 
@@ -840,14 +607,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../metrics_reference/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Troubleshooting
+    Metrics reference
   
 
     
@@ -1120,8 +887,6 @@
 <ul>
 <li><code>atlas_threshold</code> (float, default <code>0.0</code>) — minimum probability to include a voxel. The comparison is strict (<code>&gt;</code>), so a voxel with probability exactly equal to the threshold is excluded. Set to <code>0.0</code> to include every non-zero voxel.</li>
 </ul>
-<p><strong>Output filename entity</strong></p>
-<p>When <code>atlas_threshold &gt; 0</code>, the value is embedded in the output filename as the BIDS-style entity <code>atlasthr-&lt;value&gt;</code> (e.g., <code>atlasthr-0.25</code>). The entity is omitted when the threshold is zero.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parcellate</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumetricParcellator</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># 4D probabilistic atlas — detected automatically</span>
@@ -1140,10 +905,6 @@
 <ul>
 <li><code>mask_threshold</code> (float, default <code>0.0</code>) — minimum mask value to keep a voxel. Strict <code>&gt;</code> comparison; voxels equal to the threshold are excluded. The default of <code>0.0</code> preserves the pre-v0.2.0 behaviour of including all non-zero mask voxels.</li>
 </ul>
-<p><strong>Output filename entity</strong></p>
-<p>When <code>mask_threshold &gt; 0</code>, the value appears as <code>maskthr-&lt;value&gt;</code> in the output filename. The entity is omitted when the threshold is zero.</p>
-<p><strong>Environment variable</strong></p>
-<p>When using the <code>parcellate-cat12</code> standalone CLI, set <code>MASKING_THRESHOLD</code> to supply the threshold without editing config files.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">parcellate</span><span class="w"> </span><span class="kn">import</span> <span class="n">VolumetricParcellator</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">parcellator</span> <span class="o">=</span> <span class="n">VolumetricParcellator</span><span class="p">(</span>

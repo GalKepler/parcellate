@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.">
+        <meta name="description" content="A Python library for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation.">
       
       
       
@@ -269,29 +269,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="cat12_guide/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  Pipeline guides
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="cli_reference/" class="md-tabs__link">
+        <a href="usage/" class="md-tabs__link">
           
   
   
@@ -426,6 +404,8 @@
       
         
       
+        
+      
     
     
     
@@ -449,7 +429,7 @@
   <span class="md-ellipsis">
     
   
-    Pipeline guides
+    Reference
   
 
     
@@ -465,224 +445,11 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Pipeline guides
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="cat12_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CAT12
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="qsirecon_guide/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    QSIRecon
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
-        
-          
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
     Reference
   
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="cli_reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CLI reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="metrics_reference/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Metrics reference
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="configuration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
             
               
                 
@@ -719,14 +486,14 @@
   
   
     <li class="md-nav__item">
-      <a href="troubleshooting/" class="md-nav__link">
+      <a href="metrics_reference/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Troubleshooting
+    Metrics reference
   
 
     
@@ -818,28 +585,28 @@
 </p>
 
 <h1 id="parcellate">parcellate<a class="headerlink" href="#parcellate" title="Permanent link">&para;</a></h1>
-<p><code>parcellate</code> is a BIDS App for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation. It integrates with <strong>CAT12</strong> (VBM) and <strong>QSIRecon</strong> (dMRI) preprocessing pipelines and produces tidy TSV tables suitable for downstream analysis and quality control.</p>
+<p><code>parcellate</code> is a Python library for extracting regional statistics from scalar neuroimaging maps using atlas-based parcellation. It provides a scikit-learn–style <code>fit</code> / <code>transform</code> API that handles atlas resampling, masking, and aggregation — returning tidy <code>pandas.DataFrame</code> tables ready for downstream analysis.</p>
 <hr />
 <div class="grid cards">
 <ul>
 <li>
 <p><strong>Quick start</strong></p>
-<p>Install the package, configure your environment, and run your first parcellation.</p>
+<p>Install the package and run your first parcellation in minutes.</p>
 <p><a href="getting_started/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Getting started</a></p>
 </li>
 <li>
-<p><strong>CAT12 guide</strong></p>
-<p>Process CAT12 VBM outputs: input layout, output format, masking, and TIV.</p>
-<p><a href="cat12_guide/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> CAT12 pipeline guide</a></p>
+<p><strong>Usage guide</strong></p>
+<p>Atlases, lookup tables, resampling modes, probabilistic atlases, and custom statistics.</p>
+<p><a href="usage/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Usage guide</a></p>
 </li>
 <li>
-<p><strong>QSIRecon guide</strong></p>
-<p>Process QSIRecon diffusion outputs including 4D probabilistic atlases.</p>
-<p><a href="qsirecon_guide/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> QSIRecon pipeline guide</a></p>
+<p><strong>Metrics reference</strong></p>
+<p>All 45 built-in statistics organized into core, extended, and diagnostic tiers.</p>
+<p><a href="metrics_reference/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Metrics reference</a></p>
 </li>
 <li>
 <p><strong>API reference</strong></p>
-<p>Explore the VolumetricParcellator and the built-in statistical functions.</p>
+<p>Full API documentation generated from source docstrings.</p>
 <p><a href="api/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> API</a></p>
 </li>
 </ul>
