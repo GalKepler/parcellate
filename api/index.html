@@ -3761,7 +3761,7 @@ Defaults to <code>None</code>, which selects all built-in statistics
 <a id="__codelineno-0-26" name="__codelineno-0-26"></a>
 <a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="c1"># Correct step: Sum the intensities within the mask</span>
 <a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="c1"># This represents the sum of tissue fractions/volume units</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">tissue_sum</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nansum</span><span class="p">(</span><span class="n">parcel_values</span><span class="p">)</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">tissue_sum</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">(</span><span class="o">~</span><span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">parcel_values</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">parcel_values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">))</span>
 <a id="__codelineno-0-30" name="__codelineno-0-30"></a>
 <a id="__codelineno-0-31" name="__codelineno-0-31"></a>    <span class="c1"># Total volume in mm^3</span>
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">total_volume</span> <span class="o">=</span> <span class="n">tissue_sum</span> <span class="o">*</span> <span class="n">voxel_volume</span>
