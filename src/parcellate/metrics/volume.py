@@ -26,7 +26,7 @@ def volume(parcel_values: np.ndarray, scalar_img: nib.Nifti1Image) -> float:
 
     # Correct step: Sum the intensities within the mask
     # This represents the sum of tissue fractions/volume units
-    tissue_sum = np.nansum(parcel_values)
+    tissue_sum = np.count_nonzero(~np.isnan(parcel_values) & (np.abs(parcel_values) > 0))
 
     # Total volume in mm^3
     total_volume = tissue_sum * voxel_volume
