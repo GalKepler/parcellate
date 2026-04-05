@@ -48,13 +48,19 @@ def test_fit_and_transform_compute_basic_statistics() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    # volume_mm3 = sum of tissue intensities * voxel_volume
-    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
+    # volume_mm3 = sum of non-zero voxels * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(
+        np.count_nonzero(~np.isnan(region1_values) & (np.abs(region1_values) > 0))
+        * np.prod(atlas_img.header.get_zooms()[:3])
+    )
 
     assert second["mean"] == pytest.approx(np.nanmean(region2_values))
     assert second["median"] == pytest.approx(np.nanmedian(region2_values))
     assert second["std"] == pytest.approx(np.nanstd(region2_values))
-    assert second["volume_mm3"] == pytest.approx(np.nansum(region2_values))
+    assert second["volume_mm3"] == pytest.approx(
+        np.count_nonzero(~np.isnan(region2_values) & (np.abs(region2_values) > 0))
+        * np.prod(atlas_img.header.get_zooms()[:3])
+    )
 
 
 def test_masked_atlas_excludes_voxels() -> None:
@@ -80,7 +86,7 @@ def test_masked_atlas_excludes_voxels() -> None:
 
     second = df.loc[df["index"] == 2].iloc[0]
     assert second["voxel_count"] == 3
-    assert second["volume_mm3"] == pytest.approx(3.0)
+    assert second["volume_mm3"] == pytest.approx(3.0 * np.prod(atlas_img.header.get_zooms()[:3]))
 
 
 def test_custom_statistics_override_defaults() -> None:
@@ -180,13 +186,19 @@ def test_no_valid_voxels_in_parcel() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    # volume_mm3 = nansum of tissue intensities * voxel_volume
-    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
+    # volume_mm3 =  * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(
+        np.count_nonzero(~np.isnan(region1_values) & (np.abs(region1_values) > 0))
+        * np.prod(atlas_img.header.get_zooms()[:3])
+    )
 
     assert second["mean"] == pytest.approx(np.nanmean(region2_values))
     assert second["median"] == pytest.approx(np.nanmedian(region2_values))
     assert second["std"] == pytest.approx(np.nanstd(region2_values))
-    assert second["volume_mm3"] == pytest.approx(np.nansum(region2_values))
+    assert second["volume_mm3"] == pytest.approx(
+        np.count_nonzero(~np.isnan(region2_values) & (np.abs(region2_values) > 0))
+        * np.prod(atlas_img.header.get_zooms()[:3])
+    )
 
 
 def test_atlas_is_filename() -> None:
@@ -217,8 +229,11 @@ def test_atlas_is_filename() -> None:
     assert first["mean"] == pytest.approx(np.nanmean(region1_values))
     assert first["median"] == pytest.approx(np.nanmedian(region1_values))
     assert first["std"] == pytest.approx(np.nanstd(region1_values))
-    # volume_mm3 = sum of tissue intensities * voxel_volume
-    assert first["volume_mm3"] == pytest.approx(np.nansum(region1_values))
+    # volume_mm3 = sum of non-zero voxels * voxel_volume
+    assert first["volume_mm3"] == pytest.approx(
+        np.count_nonzero(~np.isnan(region1_values) & (np.abs(region1_values) > 0))
+        * np.prod(atlas_img.header.get_zooms()[:3])
+    )
 
 
 def test_lut_missing_columns() -> None:
